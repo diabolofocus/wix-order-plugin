@@ -1,9 +1,10 @@
 // Global variables
 let orderId = null;
-let baseUrl = 'https://dev-sitex-1705224153.wix-development-sites.org';
+let baseUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; // Update with your actual Wix site URL
 
 // Initialize the app when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
   initializeApp();
 });
 
@@ -35,6 +36,11 @@ function getOrderIdFromURL() {
 function displayOrderInfo(orderId) {
   document.getElementById('orderId').textContent = orderId;
   
+  // Create a random tracking number for testing
+  const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
+  document.getElementById('trackingNumber').value = randomTrackingNum;
+  console.log(`Tracking Number: ${randomTrackingNum}`);
+  
   // Enable form fields and button
   document.getElementById('trackingNumber').disabled = false;
   document.getElementById('trackingCompany').disabled = false;
@@ -42,7 +48,7 @@ function displayOrderInfo(orderId) {
 }
 
 // Handle the fulfillment process
-async function handleFulfillment() {
+function handleFulfillment() {
   console.log('🚀 Starting fulfillment process...');
   
   // Get form values
@@ -71,63 +77,86 @@ async function handleFulfillment() {
   console.log(`Tracking Number: ${trackingNumber}`);
   
   // Try different methods to fulfill the order
-  try {
-    // First try HTTP Functions
-    console.log('🔄 Trying HTTP Functions...');
-    const functionResult = await applyTracking(data, 'function');
-    if (functionResult.success) {
-      showSuccess('Order fulfilled successfully using HTTP Functions');
-      return;
-    }
-    
-    // If HTTP Functions fail, try Web Method
-    console.log('🔄 Trying Web Method...');
-    const webMethodResult = await applyTracking(data, 'webmethod');
-    if (webMethodResult.success) {
-      showSuccess('Order fulfilled successfully using Web Method');
-      return;
-    }
-    
-    // If both methods fail, show error
-    throw new Error('Both fulfillment methods failed');
-    
-  } catch (error) {
-    console.error('❌ Final error:', error);
-    showError('Failed to fulfill order. See console for details.');
-    // Re-enable the button
-    document.getElementById('fulfillButton').disabled = false;
-  }
+  tryHTTPFunction(data)
+    .catch(() => tryWebMethod(data))
+    .catch(showFinalError);
 }
 
-// Apply tracking information using specified method
-async function applyTracking(data, method) {
-  const endpoints = {
-    'function': `${baseUrl}/_functions/fulfillOrder`,
-    'webmethod': `${baseUrl}/_api/fulfillment-webmethod/createOrderFulfillment`
-  };
+// Try HTTP Function method
+function tryHTTPFunction(data) {
+  console.log('🔄 Trying HTTP Functions...');
+  const url = `${baseUrl}/_functions/fulfillOrder`;
   
-  const url = endpoints[method];
-  
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      mode: 'cors', // Important for cross-origin requests
-      body: JSON.stringify(data)
-    });
-    
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    mode: 'cors', // Important for cross-origin requests
+    body: JSON.stringify(data)
+  })
+  .then(response => {
     if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
+      throw new Error(`HTTP Functions response not OK: ${response.status}`);
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error(`❌ ${method === 'function' ? 'HTTP Functions' : 'Web Method'} fetch error:`, error);
+    return response.json();
+  })
+  .then(result => {
+    if (result.success) {
+      showSuccess('Order fulfilled successfully using HTTP Functions');
+      return result;
+    } else {
+      throw new Error(result.message || 'HTTP Functions call failed');
+    }
+  })
+  .catch(error => {
+    console.error('❌ HTTP Functions fetch error:', error);
+    throw error; // Rethrow to try the next method
+  });
+}
+
+// Try Web Method
+function tryWebMethod(data) {
+  console.log('🔄 Trying Web Method...');
+  const url = `${baseUrl}/_api/fulfillment-webmethod/createOrderFulfillment`;
+  
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    mode: 'cors',
+    body: JSON.stringify(data)
+  })
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`Web Method response not OK: ${response.status}`);
+    }
+    return response.json();
+  })
+  .then(result => {
+    if (result.success) {
+      showSuccess('Order fulfilled successfully using Web Method');
+      return result;
+    } else {
+      throw new Error(result.message || 'Web Method call failed');
+    }
+  })
+  .catch(error => {
+    console.error('❌ Web Method fetch error:', error);
     throw error;
-  }
+  });
+}
+
+// Show final error after all methods fail
+function showFinalError(error) {
+  console.error('❌ Final error:', error);
+  showError('Failed to fulfill order. See console for details.');
+  
+  // Re-enable the button
+  document.getElementById('fulfillButton').disabled = false;
 }
 
 // Show success message
