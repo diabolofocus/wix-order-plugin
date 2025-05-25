@@ -154,16 +154,6 @@
             white-space: pre-wrap;
         }
         
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            background: #e1f5fe;
-            color: #0277bd;
-        }
-        
         .loading {
             text-align: center;
             padding: 40px;
@@ -209,30 +199,11 @@
         
         let currentOrderData = null;
         
-        // Extract order ID from URL parameters
         function getOrderIdFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('orderId');
         }
-
-        // Helper function to get Wix instance token from URL
-        function getWixInstanceToken() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('instance') || '';
-        }
-
-        // Helper function to get Wix site domain for API calls
-        function getWixSiteDomain() {
-            // Extract site domain from the origin parameter
-            const urlParams = new URLSearchParams(window.location.search);
-            const origin = urlParams.get('origin');
-            if (origin) {
-                return decodeURIComponent(origin);
-            }
-            return 'https://manage.wix.com'; // fallback
-        }
         
-        // Function to create tracking form
         function createTrackingForm() {
             return `
                 <div class="tracking-form">
@@ -249,7 +220,8 @@
                     
                     <div class="shipping-info">
                         <strong>🚚 Shipping Provider:</strong> DHL<br>
-                        <strong>🔗 Tracking Link:</strong> Auto-generated DHL tracking URL
+                        <strong>🔗 Tracking Link:</strong> Auto-generated DHL tracking URL<br>
+                        <strong>⚠️ Note:</strong> This will use Wix's built-in fulfillment API
                     </div>
                     
                     <div class="button-group">
@@ -260,7 +232,6 @@
             `;
         }
         
-        // Function to display order information with tracking form
         function displayOrderWithTracking(data) {
             const content = document.getElementById('plugin-content');
             currentOrderData = data;
@@ -269,7 +240,6 @@
             
             html += '<div class="order-info">';
             
-            // Display order ID if available
             if (data.orderId) {
                 html += `
                     <div class="info-card">
@@ -279,20 +249,18 @@
                 `;
             }
             
-            // Display connection status
             html += `
                 <div class="info-card">
                     <div class="info-label">📡 Connection Status</div>
                     <div class="info-value">✅ Connected to Wix Dashboard
 ✅ Order data loaded
-✅ Ready for fulfillment</div>
+⚡ Using simplified direct approach</div>
                 </div>
             `;
             
             html += '</div>';
             content.innerHTML = html;
             
-            // Enable the apply button when tracking number is entered
             const trackingInput = document.getElementById('trackingNumber');
             const applyBtn = document.getElementById('applyBtn');
             
@@ -301,7 +269,6 @@
             });
         }
         
-        // Function to show error
         function showError(message) {
             const content = document.getElementById('plugin-content');
             content.innerHTML = `
@@ -309,24 +276,25 @@
                     ⚠️ ${message}
                 </div>
                 <div class="info-card">
-                    <div class="info-label">💡 Troubleshooting</div>
-                    <div class="info-value">
-                        • Make sure this plugin is installed in a Wix app<br>
-                        • Check that you're viewing this on an actual order page<br>
-                        • Open browser console for more details
-                    </div>
+                    <div class="info-label">🔧 Debug Information</div>
+                    <div class="info-value">This simplified version attempts to call Wix eCommerce APIs directly.
+                    
+If this fails, we need to check:
+1. Backend file structure
+2. HTTP function deployment
+3. API permissions</div>
                 </div>
+                <button class="btn btn-apply" onclick="location.reload()">🔄 Retry</button>
             `;
         }
         
-        // Cancel tracking function
         function cancelTracking() {
             console.log('Tracking cancelled by user');
             document.getElementById('trackingNumber').value = '';
             document.getElementById('applyBtn').disabled = true;
         }
         
-        // Apply tracking function - FIXED VERSION
+        // Simplified approach - try multiple endpoints with better error handling
         async function applyTracking() {
             const trackingNumber = document.getElementById('trackingNumber').value.trim();
             
@@ -335,14 +303,14 @@
                 return;
             }
             
-            // Disable the button to prevent multiple clicks
             const applyBtn = document.getElementById('applyBtn');
             applyBtn.disabled = true;
             applyBtn.textContent = '⌛ Processing...';
             
             try {
-                console.log('Applying tracking number:', trackingNumber);
-                console.log('Order data:', currentOrderData);
+                console.log('🚀 Starting fulfillment process...');
+                console.log('Order ID:', currentOrderData?.orderId);
+                console.log('Tracking Number:', trackingNumber);
                 
                 const orderId = currentOrderData?.orderId || 'UNKNOWN';
                 
@@ -350,81 +318,82 @@
                     throw new Error('Order ID not found. Please refresh and try again.');
                 }
                 
-                // Try to call the backend web method first (recommended approach)
-                try {
-                    console.log('Attempting to use Wix Web Method...');
-                    
-                    // Check if we're in a Wix environment with access to backend functions
-                    if (window.wixWindow && window.wixWindow.backend) {
-                        const result = await window.wixWindow.backend.createOrderFulfillment(
-                            orderId, 
-                            trackingNumber, 
-                            null // Let backend determine line items
-                        );
-                        
-                        if (result && result.success) {
-                            showSuccessMessage(
-                                trackingNumber, 
-                                result.data.trackingLink, 
-                                'Order fulfilled successfully via Wix backend!'
-                            );
-                            return;
-                        }
+                // Try different endpoints in order of preference
+                const endpoints = [
+                    {
+                        name: 'HTTP Functions',
+                        url: `https://dev-sitex-1705224153.wix-development-sites.org/_functions/fulfillOrder`,
+                        method: 'POST'
+                    },
+                    {
+                        name: 'Web Method',
+                        url: `https://dev-sitex-1705224153.wix-development-sites.org/_api/fulfillment-webmethod/createOrderFulfillment`,
+                        method: 'POST'
                     }
-                    
-                    throw new Error('Wix backend not available, trying HTTP endpoint...');
-                    
-                } catch (webMethodError) {
-                    console.log('Web method failed, trying HTTP endpoint:', webMethodError.message);
-                    
-                    // Fallback to HTTP endpoint - Call web method directly
-                    const wixSiteUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; 
-                    const response = await fetch(`${wixSiteUrl}/_api/fulfillment-webmethod/createOrderFulfillment`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify([orderId, trackingNumber, null]) // Web method parameters as array
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
+                ];
+                
+                let lastError = null;
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        console.log(`🔄 Trying ${endpoint.name}...`);
                         
-                        if (result.success) {
-                            showSuccessMessage(
-                                trackingNumber, 
-                                result.data.trackingLink, 
-                                'Order fulfilled successfully via HTTP endpoint!'
-                            );
-                            return;
+                        const response = await fetch(endpoint.url, {
+                            method: endpoint.method,
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                orderId: orderId,
+                                trackingNumber: trackingNumber
+                            })
+                        });
+                        
+                        console.log(`📡 ${endpoint.name} response:`, response.status, response.statusText);
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log(`✅ ${endpoint.name} success:`, result);
+                            
+                            if (result.success) {
+                                showSuccessMessage(trackingNumber, result.data?.trackingLink, `Success via ${endpoint.name}!`);
+                                return;
+                            }
                         } else {
-                            throw new Error(result.message || 'Fulfillment failed');
+                            const errorText = await response.text();
+                            console.log(`❌ ${endpoint.name} error response:`, errorText);
+                            lastError = new Error(`${endpoint.name} failed: ${response.status} ${response.statusText}\n${errorText}`);
                         }
-                    } else {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.message || `HTTP error: ${response.status}`);
+                        
+                    } catch (fetchError) {
+                        console.log(`❌ ${endpoint.name} fetch error:`, fetchError);
+                        lastError = fetchError;
+                        continue; // Try next endpoint
                     }
                 }
                 
-            } catch (error) {
-                console.error('❌ Error processing tracking:', error);
-                showError(`Error: ${error.message}`);
+                // If all endpoints failed, throw the last error
+                throw lastError || new Error('All endpoints failed');
                 
-                // Re-enable button
+            } catch (error) {
+                console.error('❌ Final error:', error);
+                showError(`All fulfillment attempts failed: ${error.message}`);
+                
                 applyBtn.disabled = false;
                 applyBtn.textContent = '✅ Apply Tracking';
             }
         }
         
-        // Show success message
         function showSuccessMessage(trackingNumber, trackingLink, message) {
             const content = document.getElementById('plugin-content');
+            const link = trackingLink || `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`;
+            
             content.innerHTML = `
                 <div class="success">
                     ✅ ${message}<br>
                     <strong>Tracking Number:</strong> ${trackingNumber}<br>
                     <strong>Provider:</strong> DHL<br>
-                    <strong>Tracking Link:</strong> <a href="${trackingLink}" target="_blank">Track Package</a>
+                    <strong>Tracking Link:</strong> <a href="${link}" target="_blank">Track Package</a>
                 </div>
                 <div class="info-card">
                     <div class="info-label">🎉 Fulfillment Complete</div>
@@ -434,11 +403,9 @@
             `;
         }
         
-        // Initialize plugin with better error handling
         function initializePlugin() {
             console.log('🚀 Initializing plugin...');
             
-            // Method 1: Extract order ID from URL (most reliable)
             const orderId = getOrderIdFromUrl();
             if (orderId) {
                 console.log('✅ Found order ID in URL:', orderId);
@@ -451,57 +418,11 @@
                 return;
             }
             
-            // Method 2: Try to get from Wix Dashboard context
-            setTimeout(() => {
-                tryWixDashboardConnection();
-            }, 500);
-            
-            // Method 3: Fallback to working interface
             setTimeout(() => {
                 if (!currentOrderData) {
                     showError('Could not extract order ID from URL. Please make sure you are accessing this plugin from a Wix order page.');
                 }
             }, 2000);
-        }
-        
-        // Try to connect to Wix Dashboard
-        function tryWixDashboardConnection() {
-            try {
-                // Check for various Wix global objects
-                if (window.wixDashboard) {
-                    console.log('✅ Found wixDashboard');
-                    // Try to get context from dashboard
-                    if (window.wixDashboard.getContext) {
-                        const context = window.wixDashboard.getContext();
-                        if (context && context.orderId) {
-                            currentOrderData = {
-                                orderId: context.orderId,
-                                source: 'Wix Dashboard Context'
-                            };
-                            displayOrderWithTracking(currentOrderData);
-                            return;
-                        }
-                    }
-                }
-                
-                // Check for URL parameters as backup
-                const urlParams = new URLSearchParams(window.location.search);
-                const orderIdFromUrl = urlParams.get('orderId');
-                
-                if (orderIdFromUrl) {
-                    currentOrderData = {
-                        orderId: orderIdFromUrl,
-                        source: 'URL parameters'
-                    };
-                    displayOrderWithTracking(currentOrderData);
-                    return;
-                }
-                
-                console.log('⚠️ Could not get order context from Wix Dashboard');
-                
-            } catch (error) {
-                console.error('Error connecting to Wix Dashboard:', error);
-            }
         }
         
         // Start the plugin
