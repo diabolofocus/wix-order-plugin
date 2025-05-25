@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Dashboard Plugin</title>
+    <title>Order Fulfillment Plugin</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -40,6 +40,95 @@
             font-size: 14px;
         }
         
+        .tracking-form {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #24292e;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5da;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #0366d6;
+            box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.1);
+        }
+        
+        .shipping-info {
+            background: #e6f3ff;
+            border: 1px solid #0366d6;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 13px;
+        }
+        
+        .shipping-info strong {
+            color: #0366d6;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid;
+            transition: all 0.2s;
+        }
+        
+        .btn-cancel {
+            background: white;
+            color: #586069;
+            border-color: #d1d5da;
+        }
+        
+        .btn-cancel:hover {
+            background: #f6f8fa;
+        }
+        
+        .btn-apply {
+            background: #0366d6;
+            color: white;
+            border-color: #0366d6;
+        }
+        
+        .btn-apply:hover {
+            background: #0256cc;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
         .order-info {
             display: grid;
             gap: 16px;
@@ -62,6 +151,7 @@
             color: #586069;
             font-family: 'SFMono-Regular', Consolas, monospace;
             font-size: 13px;
+            white-space: pre-wrap;
         }
         
         .status-badge {
@@ -88,13 +178,22 @@
             border-radius: 6px;
             margin-bottom: 16px;
         }
+        
+        .success {
+            background: #e6f7ff;
+            border: 1px solid #52c41a;
+            color: #237804;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
     </style>
 </head>
 <body>
     <div class="plugin-container">
         <div class="plugin-header">
-            <h1 class="plugin-title">Custom Order Plugin</h1>
-            <p class="plugin-subtitle">Enhanced order management functionality</p>
+            <h1 class="plugin-title">📦 Order Fulfillment</h1>
+            <p class="plugin-subtitle">Add tracking information and fulfill order items</p>
         </div>
         
         <div id="plugin-content">
@@ -105,27 +204,52 @@
         </div>
     </div>
 
-    <!-- Wix Dashboard SDK -->
+    <!-- Load Dashboard SDK -->
     <script src="https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js"></script>
     
     <script>
         console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
         
-        // Function to display order information
-        function displayOrderInfo(data) {
-            const content = document.getElementById('plugin-content');
-            
-            let html = '<div class="order-info">';
-            
-            // Display raw data for debugging
-            html += `
-                <div class="info-card">
-                    <div class="info-label">📋 Raw Dashboard Data</div>
-                    <div class="info-value">${JSON.stringify(data, null, 2)}</div>
+        let currentOrderData = null;
+        
+        // Function to create tracking form
+        function createTrackingForm() {
+            return `
+                <div class="tracking-form">
+                    <div class="form-group">
+                        <label class="form-label" for="trackingNumber">📋 Tracking Number</label>
+                        <input 
+                            type="text" 
+                            id="trackingNumber" 
+                            class="form-input" 
+                            placeholder="Enter DHL tracking number"
+                            maxlength="50"
+                        >
+                    </div>
+                    
+                    <div class="shipping-info">
+                        <strong>🚚 Shipping Provider:</strong> DHL<br>
+                        <strong>🔗 Tracking Link:</strong> Auto-generated DHL tracking URL
+                    </div>
+                    
+                    <div class="button-group">
+                        <button class="btn btn-cancel" onclick="cancelTracking()">❌ Cancel</button>
+                        <button class="btn btn-apply" onclick="applyTracking()" id="applyBtn" disabled>✅ Apply Tracking</button>
+                    </div>
                 </div>
             `;
+        }
+        
+        // Function to display order information with tracking form
+        function displayOrderWithTracking(data) {
+            const content = document.getElementById('plugin-content');
+            currentOrderData = data;
             
-            // Try to extract common order properties
+            let html = createTrackingForm();
+            
+            html += '<div class="order-info">';
+            
+            // Display order ID if available
             if (data.orderId) {
                 html += `
                     <div class="info-card">
@@ -135,36 +259,35 @@
                 `;
             }
             
-            if (data.status) {
-                html += `
-                    <div class="info-card">
-                        <div class="info-label">📊 Status</div>
-                        <div class="info-value">
-                            <span class="status-badge">${data.status}</span>
-                        </div>
-                    </div>
-                `;
-            }
-            
-            if (data.customerId) {
-                html += `
-                    <div class="info-card">
-                        <div class="info-label">👤 Customer ID</div>
-                        <div class="info-value">${data.customerId}</div>
-                    </div>
-                `;
-            }
-            
-            // Add timestamp
+            // Display raw data for debugging
             html += `
                 <div class="info-card">
-                    <div class="info-label">⏰ Last Updated</div>
-                    <div class="info-value">${new Date().toLocaleString()}</div>
+                    <div class="info-label">📋 Dashboard Data (Debug)</div>
+                    <div class="info-value">${JSON.stringify(data, null, 2)}</div>
+                </div>
+            `;
+            
+            // Add integration note
+            html += `
+                <div class="info-card">
+                    <div class="info-label">⚙️ Backend Integration Required</div>
+                    <div class="info-value">To actually fulfill orders, you need to:
+1. Create a backend function using wix-ecom-backend
+2. Call createFulfillment() with elevated permissions
+3. Connect this plugin to your backend function</div>
                 </div>
             `;
             
             html += '</div>';
             content.innerHTML = html;
+            
+            // Enable the apply button when tracking number is entered
+            const trackingInput = document.getElementById('trackingNumber');
+            const applyBtn = document.getElementById('applyBtn');
+            
+            trackingInput.addEventListener('input', function() {
+                applyBtn.disabled = !this.value.trim();
+            });
         }
         
         // Function to show error
@@ -185,43 +308,112 @@
             `;
         }
         
-        // Try to connect to Wix Dashboard
-        try {
-            if (window.wixDashboard && window.wixDashboard.dashboard) {
-                console.log('Wix Dashboard SDK found, connecting...');
+        // Cancel tracking function
+        function cancelTracking() {
+            console.log('Tracking cancelled by user');
+            document.getElementById('trackingNumber').value = '';
+            document.getElementById('applyBtn').disabled = true;
+            
+            // Optional: You could hide the form or show a different state
+            const content = document.getElementById('plugin-content');
+            content.innerHTML = `<div class="success">Tracking form cancelled. Refresh to try again.</div>`;
+        }
+        
+        // Apply tracking function
+        function applyTracking() {
+            const trackingNumber = document.getElementById('trackingNumber').value.trim();
+            
+            if (!trackingNumber) {
+                alert('Please enter a tracking number');
+                return;
+            }
+            
+            console.log('Applying tracking number:', trackingNumber);
+            console.log('Order data:', currentOrderData);
+            
+            // Create the fulfillment object
+            const fulfillmentData = {
+                orderId: currentOrderData?.orderId || 'UNKNOWN',
+                trackingNumber: trackingNumber,
+                shippingProvider: 'dhl',
+                trackingLink: `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`
+            };
+            
+            console.log('Fulfillment data to send to backend:', fulfillmentData);
+            
+            // Show success message (in real implementation, call backend function)
+            const content = document.getElementById('plugin-content');
+            content.innerHTML = `
+                <div class="success">
+                    ✅ Tracking information prepared!<br>
+                    <strong>Tracking Number:</strong> ${trackingNumber}<br>
+                    <strong>Provider:</strong> DHL<br>
+                    <strong>Link:</strong> <a href="${fulfillmentData.trackingLink}" target="_blank">${fulfillmentData.trackingLink}</a>
+                </div>
+                <div class="info-card">
+                    <div class="info-label">🔧 Next Step: Backend Integration</div>
+                    <div class="info-value">This data is ready to be sent to your backend function that will call:
+wix-ecom-backend.orderFulfillments.createFulfillment(orderId, fulfillmentObject)</div>
+                </div>
+                <button class="btn btn-apply" onclick="location.reload()">🔄 Add Another Tracking</button>
+            `;
+        }
+        
+        // Wait for Dashboard SDK to load
+        function waitForDashboardSDK() {
+            let attempts = 0;
+            const maxAttempts = 50; // 5 seconds max
+            
+            const checkSDK = () => {
+                attempts++;
+                console.log(`Checking for Dashboard SDK... attempt ${attempts}`);
                 
+                if (window.wixDashboard && window.wixDashboard.dashboard) {
+                    console.log('✅ Wix Dashboard SDK found, connecting...');
+                    connectToDashboard();
+                } else if (attempts < maxAttempts) {
+                    setTimeout(checkSDK, 100);
+                } else {
+                    console.error('❌ Dashboard SDK not found after maximum attempts');
+                    showTestData();
+                }
+            };
+            
+            checkSDK();
+        }
+        
+        // Connect to dashboard
+        function connectToDashboard() {
+            try {
                 const { dashboard } = window.wixDashboard;
                 
                 // Listen for state changes from the dashboard
                 dashboard.observeState((componentParams) => {
                     console.log('📥 Received dashboard data:', componentParams);
-                    displayOrderInfo(componentParams || {});
+                    displayOrderWithTracking(componentParams || {});
                 });
                 
                 console.log('✅ Dashboard observer set up successfully');
                 
-            } else {
-                console.error('❌ Wix Dashboard SDK not found');
-                showError('Wix Dashboard SDK not available. This plugin must be embedded in a Wix dashboard page.');
+            } catch (error) {
+                console.error('❌ Error connecting to dashboard:', error);
+                showError(`Connection error: ${error.message}`);
             }
-        } catch (error) {
-            console.error('❌ Error connecting to dashboard:', error);
-            showError(`Connection error: ${error.message}`);
         }
         
-        // Fallback: Show test data after 3 seconds if no real data received
-        setTimeout(() => {
-            const content = document.getElementById('plugin-content');
-            if (content.innerHTML.includes('Connecting to Wix Dashboard')) {
-                console.log('⚠️ No dashboard data received, showing test data');
-                displayOrderInfo({
-                    message: 'No dashboard data received',
-                    timestamp: new Date().toISOString(),
-                    environment: 'Testing outside Wix Dashboard',
-                    note: 'This plugin needs to be embedded in a Wix order page to receive real data'
-                });
-            }
-        }, 3000);
+        // Show test data if no dashboard connection
+        function showTestData() {
+            console.log('⚠️ No dashboard SDK found, showing test interface');
+            displayOrderWithTracking({
+                orderId: '24c339a8-5609-4246-906a-c5328f58f3a8',
+                message: 'Dashboard SDK not available - showing test interface',
+                timestamp: new Date().toISOString(),
+                environment: 'Testing mode'
+            });
+        }
+        
+        // Start the connection process
+        waitForDashboardSDK();
     </script>
 </body>
 </html>
