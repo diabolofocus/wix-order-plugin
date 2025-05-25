@@ -1,436 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Fulfillment Plugin</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f8f9fa;
-            color: #333;
-        }
-        
-        .plugin-container {
-            background: white;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            max-width: 100%;
-        }
-        
-        .plugin-header {
-            border-bottom: 1px solid #e1e4e8;
-            padding-bottom: 16px;
-            margin-bottom: 20px;
-        }
-        
-        .plugin-title {
-            margin: 0 0 8px 0;
-            font-size: 20px;
-            font-weight: 600;
-            color: #24292e;
-        }
-        
-        .plugin-subtitle {
-            margin: 0;
-            color: #586069;
-            font-size: 14px;
-        }
-        
-        .tracking-form {
-            background: #f6f8fa;
-            border: 1px solid #e1e4e8;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .form-group {
-            margin-bottom: 16px;
-        }
-        
-        .form-label {
-            display: block;
-            font-weight: 600;
-            color: #24292e;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        .form-input {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #d1d5da;
-            border-radius: 6px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: #0366d6;
-            box-shadow: 0 0 0 3px rgba(3, 102, 214, 0.1);
-        }
-        
-        .shipping-info {
-            background: #e6f3ff;
-            border: 1px solid #0366d6;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 16px;
-            font-size: 13px;
-        }
-        
-        .shipping-info strong {
-            color: #0366d6;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-        }
-        
-        .btn {
-            padding: 8px 16px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            border: 1px solid;
-            transition: all 0.2s;
-        }
-        
-        .btn-cancel {
-            background: white;
-            color: #586069;
-            border-color: #d1d5da;
-        }
-        
-        .btn-cancel:hover {
-            background: #f6f8fa;
-        }
-        
-        .btn-apply {
-            background: #0366d6;
-            color: white;
-            border-color: #0366d6;
-        }
-        
-        .btn-apply:hover {
-            background: #0256cc;
-        }
-        
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .order-info {
-            display: grid;
-            gap: 16px;
-        }
-        
-        .info-card {
-            background: #f6f8fa;
-            border: 1px solid #e1e4e8;
-            border-radius: 6px;
-            padding: 16px;
-        }
-        
-        .info-label {
-            font-weight: 600;
-            color: #24292e;
-            margin-bottom: 4px;
-        }
-        
-        .info-value {
-            color: #586069;
-            font-family: 'SFMono-Regular', Consolas, monospace;
-            font-size: 13px;
-            white-space: pre-wrap;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #586069;
-        }
-        
-        .error {
-            background: #ffeaea;
-            border: 1px solid #f97316;
-            color: #dc2626;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-        }
-        
-        .success {
-            background: #e6f7ff;
-            border: 1px solid #52c41a;
-            color: #237804;
-            padding: 12px;
-            border-radius: 6px;
-            margin-bottom: 16px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Fulfillment</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #4a90e2;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #4a90e2;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    .order-info {
+      margin-bottom: 20px;
+      padding: 10px;
+      background-color: #f0f7ff;
+      border-left: 4px solid #4a90e2;
+    }
+    .success {
+      color: #2c8a3d;
+      background-color: #e8f5e9;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+    .error {
+      color: #c62828;
+      background-color: #ffebee;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
+    .loading {
+      text-align: center;
+      margin-top: 20px;
+      color: #666;
+    }
+  </style>
 </head>
 <body>
-    <div class="plugin-container">
-        <div class="plugin-header">
-            <h1 class="plugin-title">📦 Order Fulfillment</h1>
-            <p class="plugin-subtitle">Add DHL tracking information and fulfill order items</p>
-        </div>
-        
-        <div id="plugin-content">
-            <div class="loading">
-                <p>🔄 Connecting to Wix Dashboard...</p>
-                <p>Loading order information...</p>
-            </div>
-        </div>
+  <div class="container">
+    <h1>Order Fulfillment</h1>
+    
+    <div class="order-info">
+      <strong>Order ID:</strong> <span id="orderId">Loading...</span>
     </div>
-
-    <script>
-        console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
-        
-        let currentOrderData = null;
-        
-        function getOrderIdFromUrl() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('orderId');
-        }
-        
-        function createTrackingForm() {
-            return `
-                <div class="tracking-form">
-                    <div class="form-group">
-                        <label class="form-label" for="trackingNumber">📋 Tracking Number</label>
-                        <input 
-                            type="text" 
-                            id="trackingNumber" 
-                            class="form-input" 
-                            placeholder="Enter DHL tracking number"
-                            maxlength="50"
-                        >
-                    </div>
-                    
-                    <div class="shipping-info">
-                        <strong>🚚 Shipping Provider:</strong> DHL<br>
-                        <strong>🔗 Tracking Link:</strong> Auto-generated DHL tracking URL<br>
-                        <strong>⚠️ Note:</strong> This will use Wix's built-in fulfillment API
-                    </div>
-                    
-                    <div class="button-group">
-                        <button class="btn btn-cancel" onclick="cancelTracking()">❌ Cancel</button>
-                        <button class="btn btn-apply" onclick="applyTracking()" id="applyBtn" disabled>✅ Apply Tracking</button>
-                    </div>
-                </div>
-            `;
-        }
-        
-        function displayOrderWithTracking(data) {
-            const content = document.getElementById('plugin-content');
-            currentOrderData = data;
-            
-            let html = createTrackingForm();
-            
-            html += '<div class="order-info">';
-            
-            if (data.orderId) {
-                html += `
-                    <div class="info-card">
-                        <div class="info-label">🛍️ Order ID</div>
-                        <div class="info-value">${data.orderId}</div>
-                    </div>
-                `;
-            }
-            
-            html += `
-                <div class="info-card">
-                    <div class="info-label">📡 Connection Status</div>
-                    <div class="info-value">✅ Connected to Wix Dashboard
-✅ Order data loaded
-⚡ Using simplified direct approach</div>
-                </div>
-            `;
-            
-            html += '</div>';
-            content.innerHTML = html;
-            
-            const trackingInput = document.getElementById('trackingNumber');
-            const applyBtn = document.getElementById('applyBtn');
-            
-            trackingInput.addEventListener('input', function() {
-                applyBtn.disabled = !this.value.trim();
-            });
-        }
-        
-        function showError(message) {
-            const content = document.getElementById('plugin-content');
-            content.innerHTML = `
-                <div class="error">
-                    ⚠️ ${message}
-                </div>
-                <div class="info-card">
-                    <div class="info-label">🔧 Debug Information</div>
-                    <div class="info-value">This simplified version attempts to call Wix eCommerce APIs directly.
-                    
-If this fails, we need to check:
-1. Backend file structure
-2. HTTP function deployment
-3. API permissions</div>
-                </div>
-                <button class="btn btn-apply" onclick="location.reload()">🔄 Retry</button>
-            `;
-        }
-        
-        function cancelTracking() {
-            console.log('Tracking cancelled by user');
-            document.getElementById('trackingNumber').value = '';
-            document.getElementById('applyBtn').disabled = true;
-        }
-        
-        // Simplified approach - try multiple endpoints with better error handling
-        async function applyTracking() {
-            const trackingNumber = document.getElementById('trackingNumber').value.trim();
-            
-            if (!trackingNumber) {
-                alert('Please enter a tracking number');
-                return;
-            }
-            
-            const applyBtn = document.getElementById('applyBtn');
-            applyBtn.disabled = true;
-            applyBtn.textContent = '⌛ Processing...';
-            
-            try {
-                console.log('🚀 Starting fulfillment process...');
-                console.log('Order ID:', currentOrderData?.orderId);
-                console.log('Tracking Number:', trackingNumber);
-                
-                const orderId = currentOrderData?.orderId || 'UNKNOWN';
-                
-                if (orderId === 'UNKNOWN') {
-                    throw new Error('Order ID not found. Please refresh and try again.');
-                }
-                
-                // Try different endpoints in order of preference
-                const endpoints = [
-                    {
-                        name: 'HTTP Functions',
-                        url: `https://dev-sitex-1705224153.wix-development-sites.org/_functions/fulfillOrder`,
-                        method: 'POST'
-                    },
-                    {
-                        name: 'Web Method',
-                        url: `https://dev-sitex-1705224153.wix-development-sites.org/_api/fulfillment-webmethod/createOrderFulfillment`,
-                        method: 'POST'
-                    }
-                ];
-                
-                let lastError = null;
-                
-                for (const endpoint of endpoints) {
-                    try {
-                        console.log(`🔄 Trying ${endpoint.name}...`);
-                        
-                        const response = await fetch(endpoint.url, {
-                            method: endpoint.method,
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                orderId: orderId,
-                                trackingNumber: trackingNumber
-                            })
-                        });
-                        
-                        console.log(`📡 ${endpoint.name} response:`, response.status, response.statusText);
-                        
-                        if (response.ok) {
-                            const result = await response.json();
-                            console.log(`✅ ${endpoint.name} success:`, result);
-                            
-                            if (result.success) {
-                                showSuccessMessage(trackingNumber, result.data?.trackingLink, `Success via ${endpoint.name}!`);
-                                return;
-                            }
-                        } else {
-                            const errorText = await response.text();
-                            console.log(`❌ ${endpoint.name} error response:`, errorText);
-                            lastError = new Error(`${endpoint.name} failed: ${response.status} ${response.statusText}\n${errorText}`);
-                        }
-                        
-                    } catch (fetchError) {
-                        console.log(`❌ ${endpoint.name} fetch error:`, fetchError);
-                        lastError = fetchError;
-                        continue; // Try next endpoint
-                    }
-                }
-                
-                // If all endpoints failed, throw the last error
-                throw lastError || new Error('All endpoints failed');
-                
-            } catch (error) {
-                console.error('❌ Final error:', error);
-                showError(`All fulfillment attempts failed: ${error.message}`);
-                
-                applyBtn.disabled = false;
-                applyBtn.textContent = '✅ Apply Tracking';
-            }
-        }
-        
-        function showSuccessMessage(trackingNumber, trackingLink, message) {
-            const content = document.getElementById('plugin-content');
-            const link = trackingLink || `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`;
-            
-            content.innerHTML = `
-                <div class="success">
-                    ✅ ${message}<br>
-                    <strong>Tracking Number:</strong> ${trackingNumber}<br>
-                    <strong>Provider:</strong> DHL<br>
-                    <strong>Tracking Link:</strong> <a href="${link}" target="_blank">Track Package</a>
-                </div>
-                <div class="info-card">
-                    <div class="info-label">🎉 Fulfillment Complete</div>
-                    <div class="info-value">The order has been marked as fulfilled and the customer will receive tracking information.</div>
-                </div>
-                <button class="btn btn-apply" onclick="location.reload()">🔄 Process Another Order</button>
-            `;
-        }
-        
-        function initializePlugin() {
-            console.log('🚀 Initializing plugin...');
-            
-            const orderId = getOrderIdFromUrl();
-            if (orderId) {
-                console.log('✅ Found order ID in URL:', orderId);
-                currentOrderData = {
-                    orderId: orderId,
-                    source: 'URL parameters',
-                    timestamp: new Date().toISOString()
-                };
-                displayOrderWithTracking(currentOrderData);
-                return;
-            }
-            
-            setTimeout(() => {
-                if (!currentOrderData) {
-                    showError('Could not extract order ID from URL. Please make sure you are accessing this plugin from a Wix order page.');
-                }
-            }, 2000);
-        }
-        
-        // Start the plugin
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializePlugin);
-        } else {
-            initializePlugin();
-        }
-    </script>
+    
+    <div class="form-group">
+      <label for="trackingNumber">Tracking Number:</label>
+      <input type="text" id="trackingNumber" placeholder="Enter tracking number" disabled>
+    </div>
+    
+    <div class="form-group">
+      <label for="trackingCompany">Shipping Carrier (Optional):</label>
+      <select id="trackingCompany" disabled>
+        <option value="">Select carrier (optional)</option>
+        <option value="USPS">USPS</option>
+        <option value="UPS">UPS</option>
+        <option value="FedEx">FedEx</option>
+        <option value="DHL">DHL</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    
+    <button id="fulfillButton" disabled>Fulfill Order</button>
+    
+    <div id="statusArea"></div>
+  </div>
+  
+  <script src="app.js"></script>
 </body>
 </html>
