@@ -378,7 +378,7 @@
                     console.log('Web method failed, trying HTTP endpoint:', webMethodError.message);
                     
                     // Fallback to HTTP endpoint - Call your Wix site directly
-                    const wixSiteUrl = 'https://yoursite.wixsite.com'; // REPLACE WITH YOUR ACTUAL WIX SITE URL
+                    const wixSiteUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; 
                     const response = await fetch(`${wixSiteUrl}/_functions/fulfillOrder`, {
                         method: 'POST',
                         headers: {
