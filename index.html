@@ -438,19 +438,37 @@
         
         // Multiple methods to get order data
         function initializePlugin() {
-            console.log('Initializing plugin with multiple connection methods...');
+            console.log('🚀 Initializing plugin with multiple connection methods...');
             
-            // Method 1: Try Dashboard SDK
+            // Method 1: Extract order ID from URL (most reliable)
+            const orderId = getOrderIdFromUrl();
+            if (orderId) {
+                console.log('✅ Found order ID in URL:', orderId);
+                currentOrderData = {
+                    orderId: orderId,
+                    source: 'URL parameters',
+                    timestamp: new Date().toISOString()
+                };
+                displayOrderWithTracking(currentOrderData);
+                
+                // Still try other methods for additional data
+                setTimeout(() => {
+                    tryDashboardSDK();
+                    setupPostMessageCommunication();
+                }, 500);
+                
+                return;
+            }
+            
+            // Method 2: Try Dashboard SDK
             tryDashboardSDK();
             
-            // Method 2: URL Parameters (fallback)
+            // Method 3: PostMessage communication
             setTimeout(() => {
-                if (!currentOrderData) {
-                    tryUrlParameters();
-                }
+                setupPostMessageCommunication();
             }, 1000);
             
-            // Method 3: Show working interface anyway (final fallback)
+            // Method 4: Show working interface anyway (final fallback)
             setTimeout(() => {
                 if (!currentOrderData) {
                     showWorkingInterface();
@@ -458,7 +476,7 @@
             }, 3000);
         }
         
-        // Try to connect to Dashboard SDK
+        // Try to connect to Dashboard SDK (fixed for iframe context)
         function tryDashboardSDK() {
             let attempts = 0;
             const maxAttempts = 30; // 3 seconds max
@@ -467,26 +485,30 @@
                 attempts++;
                 console.log(`Checking for Dashboard SDK... attempt ${attempts}`);
                 
-                // Check multiple possible SDK locations
-                const possibleSDKs = [
-                    window.wixDashboard?.dashboard,
-                    window.dashboard,
-                    window.wix?.dashboard,
-                    window.parent?.wixDashboard?.dashboard
-                ];
-                
-                const workingSDK = possibleSDKs.find(sdk => sdk && typeof sdk.observeState === 'function');
-                
-                if (workingSDK) {
-                    console.log('✅ Dashboard SDK found, connecting...');
-                    connectToDashboard(workingSDK);
-                    return;
+                // In dashboard iframes, the SDK should be available directly on window
+                // Don't try to access parent window due to cross-origin restrictions
+                try {
+                    if (window.wixDashboard && window.wixDashboard.dashboard) {
+                        console.log('✅ Dashboard SDK found on window, connecting...');
+                        connectToDashboard(window.wixDashboard.dashboard);
+                        return;
+                    }
+                    
+                    // Alternative check for different SDK versions
+                    if (window.dashboard && typeof window.dashboard.observeState === 'function') {
+                        console.log('✅ Dashboard SDK found as window.dashboard, connecting...');
+                        connectToDashboard(window.dashboard);
+                        return;
+                    }
+                    
+                } catch (error) {
+                    console.log(`⚠️ SDK check error (attempt ${attempts}):`, error.message);
                 }
                 
                 if (attempts < maxAttempts) {
                     setTimeout(checkSDK, 100);
                 } else {
-                    console.log('⚠️ Dashboard SDK not found, trying URL method...');
+                    console.log('⚠️ Dashboard SDK not found after all attempts, using URL method...');
                 }
             };
             
@@ -545,19 +567,61 @@
             displayOrderWithTracking(currentOrderData);
         }
         
-        // Load Dashboard SDK asynchronously
+        // Load Dashboard SDK with better error handling
         function loadDashboardSDK() {
+            // Check if SDK is already available (might be injected by Wix)
+            if (window.wixDashboard || window.dashboard) {
+                console.log('📦 Dashboard SDK already available');
+                setTimeout(initializePlugin, 100);
+                return;
+            }
+            
+            // Try to load SDK script
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js';
+            script.crossOrigin = 'anonymous'; // Add crossorigin attribute
+            
             script.onload = () => {
-                console.log('📦 Dashboard SDK script loaded');
+                console.log('📦 Dashboard SDK script loaded successfully');
                 setTimeout(initializePlugin, 100);
             };
-            script.onerror = () => {
-                console.log('⚠️ Dashboard SDK script failed to load, continuing anyway...');
-                initializePlugin();
+            
+            script.onerror = (error) => {
+                console.log('⚠️ Dashboard SDK script failed to load, but continuing...', error);
+                // Don't prevent initialization - the plugin should work without SDK
+                setTimeout(initializePlugin, 100);
             };
+            
             document.head.appendChild(script);
+        }
+        
+        // Alternative: Use postMessage communication with parent window
+        function setupPostMessageCommunication() {
+            console.log('🔄 Setting up postMessage communication with dashboard...');
+            
+            // Listen for messages from parent window
+            window.addEventListener('message', (event) => {
+                if (event.origin !== 'https://manage.wix.com') return;
+                
+                console.log('📥 Received message from dashboard:', event.data);
+                
+                if (event.data.type === 'DASHBOARD_DATA') {
+                    currentOrderData = event.data.payload || {};
+                    displayOrderWithTracking(currentOrderData);
+                }
+            });
+            
+            // Request data from parent
+            if (window.parent && window.parent !== window) {
+                try {
+                    window.parent.postMessage({
+                        type: 'REQUEST_DASHBOARD_DATA',
+                        source: 'dashboard-plugin'
+                    }, 'https://manage.wix.com');
+                } catch (error) {
+                    console.log('⚠️ Could not send postMessage to parent:', error.message);
+                }
+            }
         }
         
         // Start the plugin
