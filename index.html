@@ -377,18 +377,14 @@
                 } catch (webMethodError) {
                     console.log('Web method failed, trying HTTP endpoint:', webMethodError.message);
                     
-                    // Fallback to HTTP endpoint - Call your Wix site directly
+                    // Fallback to HTTP endpoint - Call web method directly
                     const wixSiteUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; 
-                    const response = await fetch(`${wixSiteUrl}/_functions/fulfillOrder`, {
+                    const response = await fetch(`${wixSiteUrl}/_api/fulfillment-webmethod/createOrderFulfillment`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${getWixInstanceToken()}`,
                         },
-                        body: JSON.stringify({
-                            orderId: orderId,
-                            trackingNumber: trackingNumber
-                        })
+                        body: JSON.stringify([orderId, trackingNumber, null]) // Web method parameters as array
                     });
                     
                     if (response.ok) {
