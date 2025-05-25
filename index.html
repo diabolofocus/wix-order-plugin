@@ -71,9 +71,29 @@
       border-radius: 4px;
       margin-top: 20px;
     }
+    .warning {
+      color: #856404;
+      background-color: #fff3cd;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 20px;
+    }
     .loading {
       text-align: center;
       margin-top: 20px;
+      color: #666;
+    }
+    .manual-button {
+      background-color: #666;
+      margin-top: 20px;
+    }
+    .debug-info {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
       color: #666;
     }
   </style>
@@ -106,8 +126,40 @@
     <button id="fulfillButton" disabled>Fulfill Order</button>
     
     <div id="statusArea"></div>
+    
+    <button onclick="manualOrderId()" class="manual-button">Enter Order ID Manually</button>
+    
+    <div class="debug-info">
+      <div>URL: <span id="currentUrl"></span></div>
+      <div>Params: <span id="urlParams"></span></div>
+    </div>
   </div>
   
+  <script>
+    // Display debug info
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('currentUrl').textContent = window.location.href;
+      document.getElementById('urlParams').textContent = window.location.search;
+    });
+    
+    // Function to manually enter an order ID
+    function manualOrderId() {
+      const manualId = prompt("Enter Order ID manually:");
+      if (manualId && manualId.trim() !== "") {
+        window.orderId = manualId.trim();
+        document.getElementById('orderId').textContent = window.orderId;
+        
+        // Enable form fields
+        document.getElementById('trackingNumber').disabled = false;
+        document.getElementById('trackingCompany').disabled = false;
+        document.getElementById('fulfillButton').disabled = false;
+        
+        // Generate tracking number
+        const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
+        document.getElementById('trackingNumber').value = randomTrackingNum;
+      }
+    }
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
