@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Dashboard Plugin</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            color: #333;
+        }
+        
+        .plugin-container {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            max-width: 100%;
+        }
+        
+        .plugin-header {
+            border-bottom: 1px solid #e1e4e8;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .plugin-title {
+            margin: 0 0 8px 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #24292e;
+        }
+        
+        .plugin-subtitle {
+            margin: 0;
+            color: #586069;
+            font-size: 14px;
+        }
+        
+        .order-info {
+            display: grid;
+            gap: 16px;
+        }
+        
+        .info-card {
+            background: #f6f8fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 16px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #24292e;
+            margin-bottom: 4px;
+        }
+        
+        .info-value {
+            color: #586069;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 13px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            background: #e1f5fe;
+            color: #0277bd;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #586069;
+        }
+        
+        .error {
+            background: #ffeaea;
+            border: 1px solid #f97316;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="plugin-container">
+        <div class="plugin-header">
+            <h1 class="plugin-title">Custom Order Plugin</h1>
+            <p class="plugin-subtitle">Enhanced order management functionality</p>
+        </div>
+        
+        <div id="plugin-content">
+            <div class="loading">
+                <p>🔄 Connecting to Wix Dashboard...</p>
+                <p>Loading order information...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wix Dashboard SDK -->
+    <script src="https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js"></script>
+    
+    <script>
+        console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
+        
+        // Function to display order information
+        function displayOrderInfo(data) {
+            const content = document.getElementById('plugin-content');
+            
+            let html = '<div class="order-info">';
+            
+            // Display raw data for debugging
+            html += `
+                <div class="info-card">
+                    <div class="info-label">📋 Raw Dashboard Data</div>
+                    <div class="info-value">${JSON.stringify(data, null, 2)}</div>
+                </div>
+            `;
+            
+            // Try to extract common order properties
+            if (data.orderId) {
+                html += `
+                    <div class="info-card">
+                        <div class="info-label">🛍️ Order ID</div>
+                        <div class="info-value">${data.orderId}</div>
+                    </div>
+                `;
+            }
+            
+            if (data.status) {
+                html += `
+                    <div class="info-card">
+                        <div class="info-label">📊 Status</div>
+                        <div class="info-value">
+                            <span class="status-badge">${data.status}</span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (data.customerId) {
+                html += `
+                    <div class="info-card">
+                        <div class="info-label">👤 Customer ID</div>
+                        <div class="info-value">${data.customerId}</div>
+                    </div>
+                `;
+            }
+            
+            // Add timestamp
+            html += `
+                <div class="info-card">
+                    <div class="info-label">⏰ Last Updated</div>
+                    <div class="info-value">${new Date().toLocaleString()}</div>
+                </div>
+            `;
+            
+            html += '</div>';
+            content.innerHTML = html;
+        }
+        
+        // Function to show error
+        function showError(message) {
+            const content = document.getElementById('plugin-content');
+            content.innerHTML = `
+                <div class="error">
+                    ⚠️ ${message}
+                </div>
+                <div class="info-card">
+                    <div class="info-label">💡 Troubleshooting</div>
+                    <div class="info-value">
+                        • Make sure this plugin is installed in a Wix app<br>
+                        • Check that you're viewing this on an actual order page<br>
+                        • Open browser console for more details
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Try to connect to Wix Dashboard
+        try {
+            if (window.wixDashboard && window.wixDashboard.dashboard) {
+                console.log('Wix Dashboard SDK found, connecting...');
+                
+                const { dashboard } = window.wixDashboard;
+                
+                // Listen for state changes from the dashboard
+                dashboard.observeState((componentParams) => {
+                    console.log('📥 Received dashboard data:', componentParams);
+                    displayOrderInfo(componentParams || {});
+                });
+                
+                console.log('✅ Dashboard observer set up successfully');
+                
+            } else {
+                console.error('❌ Wix Dashboard SDK not found');
+                showError('Wix Dashboard SDK not available. This plugin must be embedded in a Wix dashboard page.');
+            }
+        } catch (error) {
+            console.error('❌ Error connecting to dashboard:', error);
+            showError(`Connection error: ${error.message}`);
+        }
+        
+        // Fallback: Show test data after 3 seconds if no real data received
+        setTimeout(() => {
+            const content = document.getElementById('plugin-content');
+            if (content.innerHTML.includes('Connecting to Wix Dashboard')) {
+                console.log('⚠️ No dashboard data received, showing test data');
+                displayOrderInfo({
+                    message: 'No dashboard data received',
+                    timestamp: new Date().toISOString(),
+                    environment: 'Testing outside Wix Dashboard',
+                    note: 'This plugin needs to be embedded in a Wix order page to receive real data'
+                });
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
