@@ -132,34 +132,237 @@
     <div class="debug-info">
       <div>URL: <span id="currentUrl"></span></div>
       <div>Params: <span id="urlParams"></span></div>
+      <div>Base URL: <span id="baseUrlDisplay"></span></div>
     </div>
   </div>
   
   <script>
+    // Global variables
+    let orderId = null;
+    let baseUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; // Update with your actual Wix site URL
+    
     // Display debug info
     document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('currentUrl').textContent = window.location.href;
       document.getElementById('urlParams').textContent = window.location.search;
+      document.getElementById('baseUrlDisplay').textContent = baseUrl;
+      
+      console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
+      initializeApp();
+      
+      // Add event listeners
+      document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
     });
+    
+    // Initialize the app
+    function initializeApp() {
+      console.log('🚀 Initializing plugin...');
+      
+      // Extract order ID from URL with better logging
+      const urlParams = new URLSearchParams(window.location.search);
+      console.log('URL Parameters:', Object.fromEntries(urlParams.entries()));
+      
+      orderId = urlParams.get('orderId');
+      console.log('Extracted Order ID:', orderId);
+      
+      if (orderId) {
+        console.log(`✅ Found order ID in URL: ${orderId}`);
+        displayOrderInfo(orderId);
+      } else {
+        // Try alternative parameter names
+        console.log('Trying alternative parameter names...');
+        const possibleParams = ['order_id', 'orderid', 'id', 'order'];
+        
+        for (const param of possibleParams) {
+          const value = urlParams.get(param);
+          if (value) {
+            console.log(`Found order ID in parameter '${param}': ${value}`);
+            orderId = value;
+            displayOrderInfo(orderId);
+            break;
+          }
+        }
+        
+        // If still no order ID, show error
+        if (!orderId) {
+          console.error('❌ No order ID found in URL');
+          console.log('Full URL:', window.location.href);
+          showError('No order ID found in URL. Please open this app from the Wix Orders dashboard or use the manual entry button below.');
+        }
+      }
+    }
     
     // Function to manually enter an order ID
     function manualOrderId() {
       const manualId = prompt("Enter Order ID manually:");
       if (manualId && manualId.trim() !== "") {
-        window.orderId = manualId.trim();
-        document.getElementById('orderId').textContent = window.orderId;
-        
-        // Enable form fields
-        document.getElementById('trackingNumber').disabled = false;
-        document.getElementById('trackingCompany').disabled = false;
-        document.getElementById('fulfillButton').disabled = false;
-        
-        // Generate tracking number
-        const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
-        document.getElementById('trackingNumber').value = randomTrackingNum;
+        orderId = manualId.trim();
+        displayOrderInfo(orderId);
+        console.log(`Manually entered Order ID: ${orderId}`);
       }
     }
+    
+    // Display order information
+    function displayOrderInfo(orderId) {
+      document.getElementById('orderId').textContent = orderId;
+      
+      // Create a random tracking number for testing
+      const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
+      document.getElementById('trackingNumber').value = randomTrackingNum;
+      console.log(`Tracking Number: ${randomTrackingNum}`);
+      
+      // Enable form fields and button
+      document.getElementById('trackingNumber').disabled = false;
+      document.getElementById('trackingCompany').disabled = false;
+      document.getElementById('fulfillButton').disabled = false;
+    }
+    
+    // Handle the fulfillment process
+    function handleFulfillment() {
+      console.log('🚀 Starting fulfillment process...');
+      
+      // Get form values
+      const trackingNumber = document.getElementById('trackingNumber').value;
+      const trackingCompany = document.getElementById('trackingCompany').value;
+      
+      if (!trackingNumber) {
+        showError('Please enter a tracking number');
+        return;
+      }
+      
+      if (!orderId) {
+        showError('No order ID available. Please enter one manually.');
+        return;
+      }
+      
+      // Disable the button to prevent multiple submissions
+      document.getElementById('fulfillButton').disabled = true;
+      
+      // Show loading state
+      document.getElementById('statusArea').innerHTML = '<div class="loading">Processing...</div>';
+      
+      // Prepare the data
+      const data = {
+        orderId: orderId,
+        trackingNumber: trackingNumber,
+        trackingCompany: trackingCompany || 'Default Carrier'
+      };
+      
+      console.log(`Order ID: ${orderId}`);
+      console.log(`Tracking Number: ${trackingNumber}`);
+      console.log(`Data being sent:`, data);
+      
+      // Try different methods to fulfill the order
+      tryHTTPFunction(data)
+        .catch((error) => {
+          console.log('HTTP Function failed, trying Web Method:', error);
+          return tryWebMethod(data);
+        })
+        .catch((error) => {
+          console.log('Web Method failed, showing final error:', error);
+          showFinalError(error);
+        });
+    }
+    
+    // Try HTTP Function method
+    function tryHTTPFunction(data) {
+      console.log('🔄 Trying HTTP Functions...');
+      const url = `${baseUrl}/_functions/fulfillOrder`;
+      console.log('Fetching URL:', url);
+      
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        mode: 'cors', // Important for cross-origin requests
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        console.log('HTTP Function Response Status:', response.status);
+        if (!response.ok) {
+          throw new Error(`HTTP Functions response not OK: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        console.log('HTTP Function Result:', result);
+        if (result.success) {
+          showSuccess('Order fulfilled successfully using HTTP Functions');
+          return result;
+        } else {
+          throw new Error(result.message || 'HTTP Functions call failed');
+        }
+      })
+      .catch(error => {
+        console.error('❌ HTTP Functions fetch error:', error);
+        throw error; // Rethrow to try the next method
+      });
+    }
+    
+    // Try Web Method
+    function tryWebMethod(data) {
+      console.log('🔄 Trying Web Method...');
+      const url = `${baseUrl}/_api/fulfillment-webmethod/createOrderFulfillment`;
+      console.log('Fetching URL:', url);
+      
+      return fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        mode: 'cors',
+        body: JSON.stringify(data)
+      })
+      .then(response => {
+        console.log('Web Method Response Status:', response.status);
+        if (!response.ok) {
+          throw new Error(`Web Method response not OK: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(result => {
+        console.log('Web Method Result:', result);
+        if (result.success) {
+          showSuccess('Order fulfilled successfully using Web Method');
+          return result;
+        } else {
+          throw new Error(result.message || 'Web Method call failed');
+        }
+      })
+      .catch(error => {
+        console.error('❌ Web Method fetch error:', error);
+        throw error;
+      });
+    }
+    
+    // Show final error after all methods fail
+    function showFinalError(error) {
+      console.error('❌ Final error:', error);
+      showError('Failed to fulfill order. See console for details. ' + error.message);
+      
+      // Re-enable the button
+      document.getElementById('fulfillButton').disabled = false;
+    }
+    
+    // Show success message
+    function showSuccess(message) {
+      const statusArea = document.getElementById('statusArea');
+      statusArea.innerHTML = `<div class="success">${message}</div>`;
+      
+      // Re-enable the button after a delay
+      setTimeout(() => {
+        document.getElementById('fulfillButton').disabled = false;
+      }, 3000);
+    }
+    
+    // Show error message
+    function showError(message) {
+      const statusArea = document.getElementById('statusArea');
+      statusArea.innerHTML = `<div class="error">${message}</div>`;
+    }
   </script>
-  <script src="app.js"></script>
 </body>
 </html>
