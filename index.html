@@ -154,16 +154,6 @@
             white-space: pre-wrap;
         }
         
-        .status-badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            background: #e1f5fe;
-            color: #0277bd;
-        }
-        
         .loading {
             text-align: center;
             padding: 40px;
@@ -213,23 +203,6 @@
         function getOrderIdFromUrl() {
             const urlParams = new URLSearchParams(window.location.search);
             return urlParams.get('orderId');
-        }
-
-        // Helper function to get Wix instance token from URL
-        function getWixInstanceToken() {
-            const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('instance') || '';
-        }
-
-        // Helper function to get Wix site domain for API calls
-        function getWixSiteDomain() {
-            // Extract site domain from the origin parameter
-            const urlParams = new URLSearchParams(window.location.search);
-            const origin = urlParams.get('origin');
-            if (origin) {
-                return decodeURIComponent(origin);
-            }
-            return 'https://manage.wix.com'; // fallback
         }
         
         // Function to create tracking form
@@ -285,7 +258,7 @@
                     <div class="info-label">📡 Connection Status</div>
                     <div class="info-value">✅ Connected to Wix Dashboard
 ✅ Order data loaded
-✅ Ready for fulfillment</div>
+✅ Using postMessage communication</div>
                 </div>
             `;
             
@@ -326,7 +299,7 @@
             document.getElementById('applyBtn').disabled = true;
         }
         
-        // Apply tracking function - FIXED VERSION
+        // Apply tracking function - Using postMessage to parent window
         async function applyTracking() {
             const trackingNumber = document.getElementById('trackingNumber').value.trim();
             
@@ -350,63 +323,49 @@
                     throw new Error('Order ID not found. Please refresh and try again.');
                 }
                 
-                // Try to call the backend web method first (recommended approach)
-                try {
-                    console.log('Attempting to use Wix Web Method...');
+                // Send message to parent window (Wix Dashboard) to execute fulfillment
+                if (window.parent && window.parent !== window) {
+                    console.log('Sending fulfillment request to parent via postMessage...');
                     
-                    // Check if we're in a Wix environment with access to backend functions
-                    if (window.wixWindow && window.wixWindow.backend) {
-                        const result = await window.wixWindow.backend.createOrderFulfillment(
-                            orderId, 
-                            trackingNumber, 
-                            null // Let backend determine line items
-                        );
-                        
-                        if (result && result.success) {
-                            showSuccessMessage(
-                                trackingNumber, 
-                                result.data.trackingLink, 
-                                'Order fulfilled successfully via Wix backend!'
-                            );
-                            return;
+                    const messageId = 'fulfillment-' + Date.now();
+                    
+                    // Listen for response from parent
+                    const responseHandler = (event) => {
+                        if (event.data.type === 'FULFILLMENT_RESPONSE' && event.data.messageId === messageId) {
+                            window.removeEventListener('message', responseHandler);
+                            
+                            if (event.data.success) {
+                                showSuccessMessage(
+                                    trackingNumber, 
+                                    event.data.trackingLink, 
+                                    'Order fulfilled successfully!'
+                                );
+                            } else {
+                                throw new Error(event.data.error || 'Fulfillment failed');
+                            }
                         }
-                    }
+                    };
                     
-                    throw new Error('Wix backend not available, trying HTTP endpoint...');
+                    window.addEventListener('message', responseHandler);
                     
-                } catch (webMethodError) {
-                    console.log('Web method failed, trying HTTP endpoint:', webMethodError.message);
-                    
-                    // Fallback to HTTP endpoint - Use relative URL to call Wix backend
-                    const response = await fetch('/_functions/fulfillOrder', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': getWixInstanceToken(), // Add Wix authorization
-                        },
-                        body: JSON.stringify({
+                    // Send fulfillment request to parent
+                    window.parent.postMessage({
+                        type: 'FULFILLMENT_REQUEST',
+                        messageId: messageId,
+                        data: {
                             orderId: orderId,
                             trackingNumber: trackingNumber
-                        })
-                    });
-                    
-                    if (response.ok) {
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            showSuccessMessage(
-                                trackingNumber, 
-                                result.data.trackingLink, 
-                                'Order fulfilled successfully via HTTP endpoint!'
-                            );
-                            return;
-                        } else {
-                            throw new Error(result.message || 'Fulfillment failed');
                         }
-                    } else {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.message || `HTTP error: ${response.status}`);
-                    }
+                    }, '*');
+                    
+                    // Timeout after 30 seconds
+                    setTimeout(() => {
+                        window.removeEventListener('message', responseHandler);
+                        throw new Error('Fulfillment request timed out');
+                    }, 30000);
+                    
+                } else {
+                    throw new Error('Parent window communication not available');
                 }
                 
             } catch (error) {
@@ -437,11 +396,11 @@
             `;
         }
         
-        // Initialize plugin with better error handling
+        // Initialize plugin
         function initializePlugin() {
             console.log('🚀 Initializing plugin...');
             
-            // Method 1: Extract order ID from URL (most reliable)
+            // Extract order ID from URL
             const orderId = getOrderIdFromUrl();
             if (orderId) {
                 console.log('✅ Found order ID in URL:', orderId);
@@ -454,57 +413,12 @@
                 return;
             }
             
-            // Method 2: Try to get from Wix Dashboard context
-            setTimeout(() => {
-                tryWixDashboardConnection();
-            }, 500);
-            
-            // Method 3: Fallback to working interface
+            // Fallback to error message
             setTimeout(() => {
                 if (!currentOrderData) {
                     showError('Could not extract order ID from URL. Please make sure you are accessing this plugin from a Wix order page.');
                 }
             }, 2000);
-        }
-        
-        // Try to connect to Wix Dashboard
-        function tryWixDashboardConnection() {
-            try {
-                // Check for various Wix global objects
-                if (window.wixDashboard) {
-                    console.log('✅ Found wixDashboard');
-                    // Try to get context from dashboard
-                    if (window.wixDashboard.getContext) {
-                        const context = window.wixDashboard.getContext();
-                        if (context && context.orderId) {
-                            currentOrderData = {
-                                orderId: context.orderId,
-                                source: 'Wix Dashboard Context'
-                            };
-                            displayOrderWithTracking(currentOrderData);
-                            return;
-                        }
-                    }
-                }
-                
-                // Check for URL parameters as backup
-                const urlParams = new URLSearchParams(window.location.search);
-                const orderIdFromUrl = urlParams.get('orderId');
-                
-                if (orderIdFromUrl) {
-                    currentOrderData = {
-                        orderId: orderIdFromUrl,
-                        source: 'URL parameters'
-                    };
-                    displayOrderWithTracking(currentOrderData);
-                    return;
-                }
-                
-                console.log('⚠️ Could not get order context from Wix Dashboard');
-                
-            } catch (error) {
-                console.error('Error connecting to Wix Dashboard:', error);
-            }
         }
         
         // Start the plugin
