@@ -355,16 +355,17 @@
                 
                 // Try to call backend function (if it exists)
                 try {
-                    const response = await fetch('/_api/fulfillment/fulfill-order', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            orderId: orderId,
-                            trackingNumber: trackingNumber
-                        })
-                    });
+                    const response = await fetch('/_functions/fulfillOrder', { // <--- This line is corrected
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+        orderId: orderId,
+        trackingNumber: trackingNumber
+        // lineItems are fetched in the backend, so no need to send them here
+    })
+});
                     
                     if (response.ok) {
                         const result = await response.json();
