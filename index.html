@@ -204,13 +204,16 @@
         </div>
     </div>
 
-    <!-- Load Dashboard SDK -->
-    <script src="https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js"></script>
-    
     <script>
         console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
         
         let currentOrderData = null;
+        
+        // Extract order ID from URL parameters
+        function getOrderIdFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('orderId');
+        }
         
         // Function to create tracking form
         function createTrackingForm() {
@@ -320,7 +323,7 @@
         }
         
         // Apply tracking function
-        function applyTracking() {
+        async function applyTracking() {
             const trackingNumber = document.getElementById('trackingNumber').value.trim();
             
             if (!trackingNumber) {
@@ -328,20 +331,83 @@
                 return;
             }
             
-            console.log('Applying tracking number:', trackingNumber);
-            console.log('Order data:', currentOrderData);
+            // Disable the button to prevent multiple clicks
+            const applyBtn = document.getElementById('applyBtn');
+            applyBtn.disabled = true;
+            applyBtn.textContent = '⌛ Processing...';
             
-            // Create the fulfillment object
-            const fulfillmentData = {
-                orderId: currentOrderData?.orderId || 'UNKNOWN',
-                trackingNumber: trackingNumber,
-                shippingProvider: 'dhl',
-                trackingLink: `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`
-            };
-            
-            console.log('Fulfillment data to send to backend:', fulfillmentData);
-            
-            // Show success message (in real implementation, call backend function)
+            try {
+                console.log('Applying tracking number:', trackingNumber);
+                console.log('Order data:', currentOrderData);
+                
+                const orderId = currentOrderData?.orderId || 'UNKNOWN';
+                
+                // Create the fulfillment data
+                const fulfillmentData = {
+                    orderId: orderId,
+                    trackingNumber: trackingNumber,
+                    shippingProvider: 'dhl',
+                    trackingLink: `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`,
+                    timestamp: new Date().toISOString()
+                };
+                
+                console.log('📦 Fulfillment data prepared:', fulfillmentData);
+                
+                // Try to call backend function (if it exists)
+                try {
+                    const response = await fetch('/_api/fulfillment/fulfill-order', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            orderId: orderId,
+                            trackingNumber: trackingNumber
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        showSuccessMessage(trackingNumber, fulfillmentData.trackingLink, 'Order fulfilled successfully via backend!');
+                        return;
+                    } else {
+                        throw new Error(`Backend call failed: ${response.status}`);
+                    }
+                    
+                } catch (backendError) {
+                    console.log('⚠️ Backend not available:', backendError.message);
+                    console.log('📋 Showing prepared data instead...');
+                    
+                    // Show prepared data (backend integration needed)
+                    showPreparedData(trackingNumber, fulfillmentData);
+                }
+                
+            } catch (error) {
+                console.error('❌ Error processing tracking:', error);
+                showError(`Error: ${error.message}`);
+                
+                // Re-enable button
+                applyBtn.disabled = false;
+                applyBtn.textContent = '✅ Apply Tracking';
+            }
+        }
+        
+        // Show success message
+        function showSuccessMessage(trackingNumber, trackingLink, message) {
+            const content = document.getElementById('plugin-content');
+            content.innerHTML = `
+                <div class="success">
+                    ✅ ${message}<br>
+                    <strong>Tracking Number:</strong> ${trackingNumber}<br>
+                    <strong>Provider:</strong> DHL<br>
+                    <strong>Tracking Link:</strong> <a href="${trackingLink}" target="_blank">Track Package</a>
+                </div>
+                <button class="btn btn-apply" onclick="location.reload()">🔄 Add Another Tracking</button>
+            `;
+        }
+        
+        // Show prepared data (when backend is not available)
+        function showPreparedData(trackingNumber, fulfillmentData) {
             const content = document.getElementById('plugin-content');
             content.innerHTML = `
                 <div class="success">
@@ -350,70 +416,156 @@
                     <strong>Provider:</strong> DHL<br>
                     <strong>Link:</strong> <a href="${fulfillmentData.trackingLink}" target="_blank">${fulfillmentData.trackingLink}</a>
                 </div>
+                
                 <div class="info-card">
-                    <div class="info-label">🔧 Next Step: Backend Integration</div>
-                    <div class="info-value">This data is ready to be sent to your backend function that will call:
-wix-ecom-backend.orderFulfillments.createFulfillment(orderId, fulfillmentObject)</div>
+                    <div class="info-label">📋 Prepared Fulfillment Data</div>
+                    <div class="info-value">${JSON.stringify(fulfillmentData, null, 2)}</div>
                 </div>
+                
+                <div class="info-card">
+                    <div class="info-label">🔧 Next Steps</div>
+                    <div class="info-value">
+                        1. Add backend files to your Wix App (not site)<br>
+                        2. Create HTTP function endpoint: /_api/fulfillment/fulfill-order<br>
+                        3. Use wix-ecom-backend.orderFulfillments.createFulfillment()<br>
+                        4. The data above is ready to be processed by your backend
+                    </div>
+                </div>
+                
                 <button class="btn btn-apply" onclick="location.reload()">🔄 Add Another Tracking</button>
             `;
         }
         
-        // Wait for Dashboard SDK to load
-        function waitForDashboardSDK() {
+        // Multiple methods to get order data
+        function initializePlugin() {
+            console.log('Initializing plugin with multiple connection methods...');
+            
+            // Method 1: Try Dashboard SDK
+            tryDashboardSDK();
+            
+            // Method 2: URL Parameters (fallback)
+            setTimeout(() => {
+                if (!currentOrderData) {
+                    tryUrlParameters();
+                }
+            }, 1000);
+            
+            // Method 3: Show working interface anyway (final fallback)
+            setTimeout(() => {
+                if (!currentOrderData) {
+                    showWorkingInterface();
+                }
+            }, 3000);
+        }
+        
+        // Try to connect to Dashboard SDK
+        function tryDashboardSDK() {
             let attempts = 0;
-            const maxAttempts = 50; // 5 seconds max
+            const maxAttempts = 30; // 3 seconds max
             
             const checkSDK = () => {
                 attempts++;
                 console.log(`Checking for Dashboard SDK... attempt ${attempts}`);
                 
-                if (window.wixDashboard && window.wixDashboard.dashboard) {
-                    console.log('✅ Wix Dashboard SDK found, connecting...');
-                    connectToDashboard();
-                } else if (attempts < maxAttempts) {
+                // Check multiple possible SDK locations
+                const possibleSDKs = [
+                    window.wixDashboard?.dashboard,
+                    window.dashboard,
+                    window.wix?.dashboard,
+                    window.parent?.wixDashboard?.dashboard
+                ];
+                
+                const workingSDK = possibleSDKs.find(sdk => sdk && typeof sdk.observeState === 'function');
+                
+                if (workingSDK) {
+                    console.log('✅ Dashboard SDK found, connecting...');
+                    connectToDashboard(workingSDK);
+                    return;
+                }
+                
+                if (attempts < maxAttempts) {
                     setTimeout(checkSDK, 100);
                 } else {
-                    console.error('❌ Dashboard SDK not found after maximum attempts');
-                    showTestData();
+                    console.log('⚠️ Dashboard SDK not found, trying URL method...');
                 }
             };
             
             checkSDK();
         }
         
-        // Connect to dashboard
-        function connectToDashboard() {
+        // Connect to dashboard SDK
+        function connectToDashboard(dashboardSDK) {
             try {
-                const { dashboard } = window.wixDashboard;
-                
-                // Listen for state changes from the dashboard
-                dashboard.observeState((componentParams) => {
+                dashboardSDK.observeState((componentParams) => {
                     console.log('📥 Received dashboard data:', componentParams);
-                    displayOrderWithTracking(componentParams || {});
+                    currentOrderData = componentParams || {};
+                    displayOrderWithTracking(currentOrderData);
                 });
                 
                 console.log('✅ Dashboard observer set up successfully');
                 
             } catch (error) {
                 console.error('❌ Error connecting to dashboard:', error);
-                showError(`Connection error: ${error.message}`);
+                tryUrlParameters();
             }
         }
         
-        // Show test data if no dashboard connection
-        function showTestData() {
-            console.log('⚠️ No dashboard SDK found, showing test interface');
-            displayOrderWithTracking({
-                orderId: '24c339a8-5609-4246-906a-c5328f58f3a8',
-                message: 'Dashboard SDK not available - showing test interface',
-                timestamp: new Date().toISOString(),
-                environment: 'Testing mode'
-            });
+        // Try to get order ID from URL parameters
+        function tryUrlParameters() {
+            console.log('🔍 Trying to extract order data from URL...');
+            
+            const orderId = getOrderIdFromUrl();
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            if (orderId) {
+                console.log('✅ Found order ID in URL:', orderId);
+                currentOrderData = {
+                    orderId: orderId,
+                    source: 'URL parameters',
+                    allParams: Object.fromEntries(urlParams.entries())
+                };
+                displayOrderWithTracking(currentOrderData);
+            } else {
+                console.log('⚠️ No order ID in URL, showing working interface anyway...');
+            }
         }
         
-        // Start the connection process
-        waitForDashboardSDK();
+        // Show working interface even without connection
+        function showWorkingInterface() {
+            if (currentOrderData) return; // Already connected
+            
+            console.log('🔧 Showing working interface without dashboard connection');
+            currentOrderData = {
+                orderId: 'UNKNOWN',
+                message: 'Plugin loaded successfully - Dashboard connection optional',
+                timestamp: new Date().toISOString(),
+                environment: 'Standalone mode',
+                note: 'You can still use the tracking form - it will prepare the data for fulfillment'
+            };
+            displayOrderWithTracking(currentOrderData);
+        }
+        
+        // Load Dashboard SDK asynchronously
+        function loadDashboardSDK() {
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js';
+            script.onload = () => {
+                console.log('📦 Dashboard SDK script loaded');
+                setTimeout(initializePlugin, 100);
+            };
+            script.onerror = () => {
+                console.log('⚠️ Dashboard SDK script failed to load, continuing anyway...');
+                initializePlugin();
+            };
+            document.head.appendChild(script);
+        }
+        
+        // Start the plugin
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadDashboardSDK);
+        } else {
+            loadDashboardSDK();
+        }
     </script>
 </body>
 </html>
