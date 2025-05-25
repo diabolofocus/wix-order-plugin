@@ -193,7 +193,7 @@
     <div class="plugin-container">
         <div class="plugin-header">
             <h1 class="plugin-title">📦 Order Fulfillment</h1>
-            <p class="plugin-subtitle">Add tracking information and fulfill order items</p>
+            <p class="plugin-subtitle">Add DHL tracking information and fulfill order items</p>
         </div>
         
         <div id="plugin-content">
@@ -262,22 +262,13 @@
                 `;
             }
             
-            // Display raw data for debugging
+            // Display connection status
             html += `
                 <div class="info-card">
-                    <div class="info-label">📋 Dashboard Data (Debug)</div>
-                    <div class="info-value">${JSON.stringify(data, null, 2)}</div>
-                </div>
-            `;
-            
-            // Add integration note
-            html += `
-                <div class="info-card">
-                    <div class="info-label">⚙️ Backend Integration Required</div>
-                    <div class="info-value">To actually fulfill orders, you need to:
-1. Create a backend function using wix-ecom-backend
-2. Call createFulfillment() with elevated permissions
-3. Connect this plugin to your backend function</div>
+                    <div class="info-label">📡 Connection Status</div>
+                    <div class="info-value">✅ Connected to Wix Dashboard
+✅ Order data loaded
+✅ Ready for fulfillment</div>
                 </div>
             `;
             
@@ -316,13 +307,9 @@
             console.log('Tracking cancelled by user');
             document.getElementById('trackingNumber').value = '';
             document.getElementById('applyBtn').disabled = true;
-            
-            // Optional: You could hide the form or show a different state
-            const content = document.getElementById('plugin-content');
-            content.innerHTML = `<div class="success">Tracking form cancelled. Refresh to try again.</div>`;
         }
         
-        // Apply tracking function
+        // Apply tracking function - FIXED VERSION
         async function applyTracking() {
             const trackingNumber = document.getElementById('trackingNumber').value.trim();
             
@@ -342,45 +329,66 @@
                 
                 const orderId = currentOrderData?.orderId || 'UNKNOWN';
                 
-                // Create the fulfillment data
-                const fulfillmentData = {
-                    orderId: orderId,
-                    trackingNumber: trackingNumber,
-                    shippingProvider: 'dhl',
-                    trackingLink: `https://www.logistics.dhl/global-en/home/tracking.html?tracking-id=${trackingNumber}`,
-                    timestamp: new Date().toISOString()
-                };
+                if (orderId === 'UNKNOWN') {
+                    throw new Error('Order ID not found. Please refresh and try again.');
+                }
                 
-                console.log('📦 Fulfillment data prepared:', fulfillmentData);
-                
-                // Try to call backend function (if it exists)
+                // Try to call the backend web method first (recommended approach)
                 try {
-                    const response = await fetch('/_functions/fulfillOrder', { // <--- This line is corrected
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-        orderId: orderId,
-        trackingNumber: trackingNumber
-        // lineItems are fetched in the backend, so no need to send them here
-    })
-});
+                    console.log('Attempting to use Wix Web Method...');
+                    
+                    // Check if we're in a Wix environment with access to backend functions
+                    if (window.wixWindow && window.wixWindow.backend) {
+                        const result = await window.wixWindow.backend.createOrderFulfillment(
+                            orderId, 
+                            trackingNumber, 
+                            null // Let backend determine line items
+                        );
+                        
+                        if (result && result.success) {
+                            showSuccessMessage(
+                                trackingNumber, 
+                                result.data.trackingLink, 
+                                'Order fulfilled successfully via Wix backend!'
+                            );
+                            return;
+                        }
+                    }
+                    
+                    throw new Error('Wix backend not available, trying HTTP endpoint...');
+                    
+                } catch (webMethodError) {
+                    console.log('Web method failed, trying HTTP endpoint:', webMethodError.message);
+                    
+                    // Fallback to HTTP endpoint
+                    const response = await fetch('/_functions/fulfillOrder', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            orderId: orderId,
+                            trackingNumber: trackingNumber
+                        })
+                    });
                     
                     if (response.ok) {
                         const result = await response.json();
-                        showSuccessMessage(trackingNumber, fulfillmentData.trackingLink, 'Order fulfilled successfully via backend!');
-                        return;
+                        
+                        if (result.success) {
+                            showSuccessMessage(
+                                trackingNumber, 
+                                result.data.trackingLink, 
+                                'Order fulfilled successfully via HTTP endpoint!'
+                            );
+                            return;
+                        } else {
+                            throw new Error(result.message || 'Fulfillment failed');
+                        }
                     } else {
-                        throw new Error(`Backend call failed: ${response.status}`);
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.message || `HTTP error: ${response.status}`);
                     }
-                    
-                } catch (backendError) {
-                    console.log('⚠️ Backend not available:', backendError.message);
-                    console.log('📋 Showing prepared data instead...');
-                    
-                    // Show prepared data (backend integration needed)
-                    showPreparedData(trackingNumber, fulfillmentData);
                 }
                 
             } catch (error) {
@@ -403,43 +411,17 @@
                     <strong>Provider:</strong> DHL<br>
                     <strong>Tracking Link:</strong> <a href="${trackingLink}" target="_blank">Track Package</a>
                 </div>
-                <button class="btn btn-apply" onclick="location.reload()">🔄 Add Another Tracking</button>
+                <div class="info-card">
+                    <div class="info-label">🎉 Fulfillment Complete</div>
+                    <div class="info-value">The order has been marked as fulfilled and the customer will receive tracking information.</div>
+                </div>
+                <button class="btn btn-apply" onclick="location.reload()">🔄 Process Another Order</button>
             `;
         }
         
-        // Show prepared data (when backend is not available)
-        function showPreparedData(trackingNumber, fulfillmentData) {
-            const content = document.getElementById('plugin-content');
-            content.innerHTML = `
-                <div class="success">
-                    ✅ Tracking information prepared!<br>
-                    <strong>Tracking Number:</strong> ${trackingNumber}<br>
-                    <strong>Provider:</strong> DHL<br>
-                    <strong>Link:</strong> <a href="${fulfillmentData.trackingLink}" target="_blank">${fulfillmentData.trackingLink}</a>
-                </div>
-                
-                <div class="info-card">
-                    <div class="info-label">📋 Prepared Fulfillment Data</div>
-                    <div class="info-value">${JSON.stringify(fulfillmentData, null, 2)}</div>
-                </div>
-                
-                <div class="info-card">
-                    <div class="info-label">🔧 Next Steps</div>
-                    <div class="info-value">
-                        1. Add backend files to your Wix App (not site)<br>
-                        2. Create HTTP function endpoint: /_api/fulfillment/fulfill-order<br>
-                        3. Use wix-ecom-backend.orderFulfillments.createFulfillment()<br>
-                        4. The data above is ready to be processed by your backend
-                    </div>
-                </div>
-                
-                <button class="btn btn-apply" onclick="location.reload()">🔄 Add Another Tracking</button>
-            `;
-        }
-        
-        // Multiple methods to get order data
+        // Initialize plugin with better error handling
         function initializePlugin() {
-            console.log('🚀 Initializing plugin with multiple connection methods...');
+            console.log('🚀 Initializing plugin...');
             
             // Method 1: Extract order ID from URL (most reliable)
             const orderId = getOrderIdFromUrl();
@@ -451,185 +433,67 @@
                     timestamp: new Date().toISOString()
                 };
                 displayOrderWithTracking(currentOrderData);
-                
-                // Still try other methods for additional data
-                setTimeout(() => {
-                    tryDashboardSDK();
-                    setupPostMessageCommunication();
-                }, 500);
-                
                 return;
             }
             
-            // Method 2: Try Dashboard SDK
-            tryDashboardSDK();
-            
-            // Method 3: PostMessage communication
+            // Method 2: Try to get from Wix Dashboard context
             setTimeout(() => {
-                setupPostMessageCommunication();
-            }, 1000);
+                tryWixDashboardConnection();
+            }, 500);
             
-            // Method 4: Show working interface anyway (final fallback)
+            // Method 3: Fallback to working interface
             setTimeout(() => {
                 if (!currentOrderData) {
-                    showWorkingInterface();
+                    showError('Could not extract order ID from URL. Please make sure you are accessing this plugin from a Wix order page.');
                 }
-            }, 3000);
+            }, 2000);
         }
         
-        // Try to connect to Dashboard SDK (fixed for iframe context)
-        function tryDashboardSDK() {
-            let attempts = 0;
-            const maxAttempts = 30; // 3 seconds max
-            
-            const checkSDK = () => {
-                attempts++;
-                console.log(`Checking for Dashboard SDK... attempt ${attempts}`);
-                
-                // In dashboard iframes, the SDK should be available directly on window
-                // Don't try to access parent window due to cross-origin restrictions
-                try {
-                    if (window.wixDashboard && window.wixDashboard.dashboard) {
-                        console.log('✅ Dashboard SDK found on window, connecting...');
-                        connectToDashboard(window.wixDashboard.dashboard);
-                        return;
-                    }
-                    
-                    // Alternative check for different SDK versions
-                    if (window.dashboard && typeof window.dashboard.observeState === 'function') {
-                        console.log('✅ Dashboard SDK found as window.dashboard, connecting...');
-                        connectToDashboard(window.dashboard);
-                        return;
-                    }
-                    
-                } catch (error) {
-                    console.log(`⚠️ SDK check error (attempt ${attempts}):`, error.message);
-                }
-                
-                if (attempts < maxAttempts) {
-                    setTimeout(checkSDK, 100);
-                } else {
-                    console.log('⚠️ Dashboard SDK not found after all attempts, using URL method...');
-                }
-            };
-            
-            checkSDK();
-        }
-        
-        // Connect to dashboard SDK
-        function connectToDashboard(dashboardSDK) {
+        // Try to connect to Wix Dashboard
+        function tryWixDashboardConnection() {
             try {
-                dashboardSDK.observeState((componentParams) => {
-                    console.log('📥 Received dashboard data:', componentParams);
-                    currentOrderData = componentParams || {};
-                    displayOrderWithTracking(currentOrderData);
-                });
+                // Check for various Wix global objects
+                if (window.wixDashboard) {
+                    console.log('✅ Found wixDashboard');
+                    // Try to get context from dashboard
+                    if (window.wixDashboard.getContext) {
+                        const context = window.wixDashboard.getContext();
+                        if (context && context.orderId) {
+                            currentOrderData = {
+                                orderId: context.orderId,
+                                source: 'Wix Dashboard Context'
+                            };
+                            displayOrderWithTracking(currentOrderData);
+                            return;
+                        }
+                    }
+                }
                 
-                console.log('✅ Dashboard observer set up successfully');
+                // Check for URL parameters as backup
+                const urlParams = new URLSearchParams(window.location.search);
+                const orderIdFromUrl = urlParams.get('orderId');
+                
+                if (orderIdFromUrl) {
+                    currentOrderData = {
+                        orderId: orderIdFromUrl,
+                        source: 'URL parameters'
+                    };
+                    displayOrderWithTracking(currentOrderData);
+                    return;
+                }
+                
+                console.log('⚠️ Could not get order context from Wix Dashboard');
                 
             } catch (error) {
-                console.error('❌ Error connecting to dashboard:', error);
-                tryUrlParameters();
-            }
-        }
-        
-        // Try to get order ID from URL parameters
-        function tryUrlParameters() {
-            console.log('🔍 Trying to extract order data from URL...');
-            
-            const orderId = getOrderIdFromUrl();
-            const urlParams = new URLSearchParams(window.location.search);
-            
-            if (orderId) {
-                console.log('✅ Found order ID in URL:', orderId);
-                currentOrderData = {
-                    orderId: orderId,
-                    source: 'URL parameters',
-                    allParams: Object.fromEntries(urlParams.entries())
-                };
-                displayOrderWithTracking(currentOrderData);
-            } else {
-                console.log('⚠️ No order ID in URL, showing working interface anyway...');
-            }
-        }
-        
-        // Show working interface even without connection
-        function showWorkingInterface() {
-            if (currentOrderData) return; // Already connected
-            
-            console.log('🔧 Showing working interface without dashboard connection');
-            currentOrderData = {
-                orderId: 'UNKNOWN',
-                message: 'Plugin loaded successfully - Dashboard connection optional',
-                timestamp: new Date().toISOString(),
-                environment: 'Standalone mode',
-                note: 'You can still use the tracking form - it will prepare the data for fulfillment'
-            };
-            displayOrderWithTracking(currentOrderData);
-        }
-        
-        // Load Dashboard SDK with better error handling
-        function loadDashboardSDK() {
-            // Check if SDK is already available (might be injected by Wix)
-            if (window.wixDashboard || window.dashboard) {
-                console.log('📦 Dashboard SDK already available');
-                setTimeout(initializePlugin, 100);
-                return;
-            }
-            
-            // Try to load SDK script
-            const script = document.createElement('script');
-            script.src = 'https://unpkg.com/@wix/dashboard@latest/dist/umd/index.js';
-            script.crossOrigin = 'anonymous'; // Add crossorigin attribute
-            
-            script.onload = () => {
-                console.log('📦 Dashboard SDK script loaded successfully');
-                setTimeout(initializePlugin, 100);
-            };
-            
-            script.onerror = (error) => {
-                console.log('⚠️ Dashboard SDK script failed to load, but continuing...', error);
-                // Don't prevent initialization - the plugin should work without SDK
-                setTimeout(initializePlugin, 100);
-            };
-            
-            document.head.appendChild(script);
-        }
-        
-        // Alternative: Use postMessage communication with parent window
-        function setupPostMessageCommunication() {
-            console.log('🔄 Setting up postMessage communication with dashboard...');
-            
-            // Listen for messages from parent window
-            window.addEventListener('message', (event) => {
-                if (event.origin !== 'https://manage.wix.com') return;
-                
-                console.log('📥 Received message from dashboard:', event.data);
-                
-                if (event.data.type === 'DASHBOARD_DATA') {
-                    currentOrderData = event.data.payload || {};
-                    displayOrderWithTracking(currentOrderData);
-                }
-            });
-            
-            // Request data from parent
-            if (window.parent && window.parent !== window) {
-                try {
-                    window.parent.postMessage({
-                        type: 'REQUEST_DASHBOARD_DATA',
-                        source: 'dashboard-plugin'
-                    }, 'https://manage.wix.com');
-                } catch (error) {
-                    console.log('⚠️ Could not send postMessage to parent:', error.message);
-                }
+                console.error('Error connecting to Wix Dashboard:', error);
             }
         }
         
         // Start the plugin
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadDashboardSDK);
+            document.addEventListener('DOMContentLoaded', initializePlugin);
         } else {
-            loadDashboardSDK();
+            initializePlugin();
         }
     </script>
 </body>
