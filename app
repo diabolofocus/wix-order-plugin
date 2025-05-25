@@ -1,3 +1,5 @@
+// app.js - Revised version
+
 // Global variables
 let orderId = null;
 let baseUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; // Update with your actual Wix site URL
@@ -12,24 +14,41 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeApp() {
   console.log('🚀 Initializing plugin...');
   
-  // Extract order ID from URL
-  orderId = getOrderIdFromURL();
+  // Extract order ID from URL with better logging
+  const urlParams = new URLSearchParams(window.location.search);
+  console.log('URL Parameters:', Object.fromEntries(urlParams.entries()));
+  
+  orderId = urlParams.get('orderId');
+  console.log('Extracted Order ID:', orderId);
+  
   if (orderId) {
     console.log(`✅ Found order ID in URL: ${orderId}`);
     displayOrderInfo(orderId);
   } else {
-    console.error('❌ No order ID found in URL');
-    showError('No order ID found in URL. Please open this app from the Wix Orders dashboard.');
+    // Try alternative parameter names
+    console.log('Trying alternative parameter names...');
+    const possibleParams = ['order_id', 'orderid', 'id', 'order'];
+    
+    for (const param of possibleParams) {
+      const value = urlParams.get(param);
+      if (value) {
+        console.log(`Found order ID in parameter '${param}': ${value}`);
+        orderId = value;
+        displayOrderInfo(orderId);
+        break;
+      }
+    }
+    
+    // If still no order ID, show error
+    if (!orderId) {
+      console.error('❌ No order ID found in URL');
+      console.log('Full URL:', window.location.href);
+      showError('No order ID found in URL. Please open this app from the Wix Orders dashboard.');
+    }
   }
   
   // Add event listeners
   document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
-}
-
-// Extract order ID from URL parameters
-function getOrderIdFromURL() {
-  const urlParams = new URLSearchParams(window.location.search);
-  return urlParams.get('orderId');
 }
 
 // Display order information
@@ -175,3 +194,26 @@ function showError(message) {
   const statusArea = document.getElementById('statusArea');
   statusArea.innerHTML = `<div class="error">${message}</div>`;
 }
+
+// For testing - display a message with a manually entered order ID
+function manualOrderId() {
+  const manualId = prompt("Enter Order ID manually:");
+  if (manualId && manualId.trim() !== "") {
+    orderId = manualId.trim();
+    displayOrderInfo(orderId);
+  }
+}
+
+// Add a manual entry button (you'll need to add this to your HTML)
+document.addEventListener('DOMContentLoaded', () => {
+  // Add manual entry button
+  const container = document.querySelector('.container');
+  if (container) {
+    const manualButton = document.createElement('button');
+    manualButton.textContent = 'Enter Order ID Manually';
+    manualButton.style.marginTop = '20px';
+    manualButton.style.backgroundColor = '#666';
+    manualButton.onclick = manualOrderId;
+    container.appendChild(manualButton);
+  }
+});
