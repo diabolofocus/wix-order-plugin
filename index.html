@@ -71,21 +71,10 @@
       border-radius: 4px;
       margin-top: 20px;
     }
-    .warning {
-      color: #856404;
-      background-color: #fff3cd;
-      padding: 10px;
-      border-radius: 4px;
-      margin-top: 20px;
-    }
     .loading {
       text-align: center;
       margin-top: 20px;
       color: #666;
-    }
-    .manual-button {
-      background-color: #666;
-      margin-top: 20px;
     }
     .debug-info {
       margin-top: 20px;
@@ -112,9 +101,9 @@
     </div>
     
     <div class="form-group">
-      <label for="trackingCompany">Shipping Carrier (Optional):</label>
+      <label for="trackingCompany">Shipping Carrier:</label>
       <select id="trackingCompany" disabled>
-        <option value="">Select carrier (optional)</option>
+        <option value="">Select carrier</option>
         <option value="USPS">USPS</option>
         <option value="UPS">UPS</option>
         <option value="FedEx">FedEx</option>
@@ -127,78 +116,66 @@
     
     <div id="statusArea"></div>
     
-    <button onclick="manualOrderId()" class="manual-button">Enter Order ID Manually</button>
-    
     <div class="debug-info">
-      <div>URL: <span id="currentUrl"></span></div>
-      <div>Params: <span id="urlParams"></span></div>
-      <div>Base URL: <span id="baseUrlDisplay"></span></div>
+      <div>Plugin Status: <span id="pluginStatus">Initializing...</span></div>
+      <div>Order Data: <span id="orderData">Loading...</span></div>
     </div>
   </div>
+  
+  <!-- Include Wix Dashboard SDK -->
+  <script src="https://static.parastorage.com/services/third-party/velo/dashboard-2.0.js"></script>
   
   <script>
     // Global variables
     let orderId = null;
-    let baseUrl = 'https://dev-sitex-1705224153.wix-development-sites.org'; // Update with your actual Wix site URL
+    let dashboardAPI = null;
     
-    // Display debug info
-    document.addEventListener('DOMContentLoaded', () => {
-      document.getElementById('currentUrl').textContent = window.location.href;
-      document.getElementById('urlParams').textContent = window.location.search;
-      document.getElementById('baseUrlDisplay').textContent = baseUrl;
+    // Initialize the plugin
+    document.addEventListener('DOMContentLoaded', async () => {
+      console.log('🚀 Initializing dashboard plugin...');
       
-      console.log('Plugin loaded, attempting to connect to Wix Dashboard...');
-      initializeApp();
-      
-      // Add event listeners
-      document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
+      try {
+        // Initialize Wix Dashboard SDK
+        dashboardAPI = await window.dashboard.init();
+        console.log('✅ Dashboard SDK initialized');
+        
+        // Observe dashboard state for order data
+        dashboardAPI.observeState((state) => {
+          console.log('Dashboard state:', state);
+          
+          if (state && state.orderId) {
+            orderId = state.orderId;
+            displayOrderInfo(orderId);
+            document.getElementById('orderData').textContent = JSON.stringify(state);
+          }
+        });
+        
+        document.getElementById('pluginStatus').textContent = 'Connected to Dashboard';
+        
+        // Add event listener for fulfill button
+        document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
+        
+      } catch (error) {
+        console.error('❌ Failed to initialize dashboard SDK:', error);
+        document.getElementById('pluginStatus').textContent = 'Failed to connect';
+        
+        // Fallback: try to get order ID from URL
+        initializeFallback();
+      }
     });
     
-    // Initialize the app
-    function initializeApp() {
-      console.log('🚀 Initializing plugin...');
+    // Fallback initialization if Dashboard SDK fails
+    function initializeFallback() {
+      console.log('Using fallback initialization...');
       
-      // Extract order ID from URL with better logging
       const urlParams = new URLSearchParams(window.location.search);
-      console.log('URL Parameters:', Object.fromEntries(urlParams.entries()));
-      
       orderId = urlParams.get('orderId');
-      console.log('Extracted Order ID:', orderId);
       
       if (orderId) {
-        console.log(`✅ Found order ID in URL: ${orderId}`);
         displayOrderInfo(orderId);
+        document.getElementById('orderData').textContent = `Fallback mode - Order ID: ${orderId}`;
       } else {
-        // Try alternative parameter names
-        console.log('Trying alternative parameter names...');
-        const possibleParams = ['order_id', 'orderid', 'id', 'order'];
-        
-        for (const param of possibleParams) {
-          const value = urlParams.get(param);
-          if (value) {
-            console.log(`Found order ID in parameter '${param}': ${value}`);
-            orderId = value;
-            displayOrderInfo(orderId);
-            break;
-          }
-        }
-        
-        // If still no order ID, show error
-        if (!orderId) {
-          console.error('❌ No order ID found in URL');
-          console.log('Full URL:', window.location.href);
-          showError('No order ID found in URL. Please open this app from the Wix Orders dashboard or use the manual entry button below.');
-        }
-      }
-    }
-    
-    // Function to manually enter an order ID
-    function manualOrderId() {
-      const manualId = prompt("Enter Order ID manually:");
-      if (manualId && manualId.trim() !== "") {
-        orderId = manualId.trim();
-        displayOrderInfo(orderId);
-        console.log(`Manually entered Order ID: ${orderId}`);
+        showError('No order ID found. Please open this plugin from the Wix Orders dashboard.');
       }
     }
     
@@ -206,10 +183,9 @@
     function displayOrderInfo(orderId) {
       document.getElementById('orderId').textContent = orderId;
       
-      // Create a random tracking number for testing
+      // Generate a default tracking number for testing
       const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
       document.getElementById('trackingNumber').value = randomTrackingNum;
-      console.log(`Tracking Number: ${randomTrackingNum}`);
       
       // Enable form fields and button
       document.getElementById('trackingNumber').disabled = false;
@@ -218,10 +194,9 @@
     }
     
     // Handle the fulfillment process
-    function handleFulfillment() {
+    async function handleFulfillment() {
       console.log('🚀 Starting fulfillment process...');
       
-      // Get form values
       const trackingNumber = document.getElementById('trackingNumber').value;
       const trackingCompany = document.getElementById('trackingCompany').value;
       
@@ -231,120 +206,86 @@
       }
       
       if (!orderId) {
-        showError('No order ID available. Please enter one manually.');
+        showError('No order ID available');
         return;
       }
       
       // Disable the button to prevent multiple submissions
       document.getElementById('fulfillButton').disabled = true;
-      
-      // Show loading state
       document.getElementById('statusArea').innerHTML = '<div class="loading">Processing...</div>';
       
-      // Prepare the data
-      const data = {
+      const fulfillmentData = {
         orderId: orderId,
         trackingNumber: trackingNumber,
         trackingCompany: trackingCompany || 'Default Carrier'
       };
       
-      console.log(`Order ID: ${orderId}`);
-      console.log(`Tracking Number: ${trackingNumber}`);
-      console.log(`Data being sent:`, data);
+      console.log('Fulfillment data:', fulfillmentData);
       
-      // Try different methods to fulfill the order
-      tryHTTPFunction(data)
-        .catch((error) => {
-          console.log('HTTP Function failed, trying Web Method:', error);
-          return tryWebMethod(data);
-        })
-        .catch((error) => {
-          console.log('Web Method failed, showing final error:', error);
-          showFinalError(error);
+      try {
+        // Try using Dashboard SDK to call web method
+        if (dashboardAPI) {
+          const result = await callWebMethodViaDashboard(fulfillmentData);
+          if (result.success) {
+            showSuccess('Order fulfilled successfully using Dashboard SDK');
+          } else {
+            throw new Error(result.message || 'Dashboard SDK call failed');
+          }
+        } else {
+          // Fallback to direct HTTP call
+          await callHTTPFunction(fulfillmentData);
+        }
+      } catch (error) {
+        console.error('❌ Fulfillment failed:', error);
+        showError('Failed to fulfill order: ' + error.message);
+        document.getElementById('fulfillButton').disabled = false;
+      }
+    }
+    
+    // Call web method via Dashboard SDK
+    async function callWebMethodViaDashboard(data) {
+      console.log('🔄 Calling web method via Dashboard SDK...');
+      
+      try {
+        // Use the Dashboard SDK to call your web method
+        const result = await dashboardAPI.httpClient.request({
+          url: '/_api/fulfillment-webmethod/createOrderFulfillment',
+          method: 'POST',
+          data: data
         });
-    }
-    
-    // Try HTTP Function method
-    function tryHTTPFunction(data) {
-      console.log('🔄 Trying HTTP Functions...');
-      const url = `${baseUrl}/_functions/fulfillOrder`;
-      console.log('Fetching URL:', url);
-      
-      return fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        mode: 'cors', // Important for cross-origin requests
-        body: JSON.stringify(data)
-      })
-      .then(response => {
-        console.log('HTTP Function Response Status:', response.status);
-        if (!response.ok) {
-          throw new Error(`HTTP Functions response not OK: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        console.log('HTTP Function Result:', result);
-        if (result.success) {
-          showSuccess('Order fulfilled successfully using HTTP Functions');
-          return result;
-        } else {
-          throw new Error(result.message || 'HTTP Functions call failed');
-        }
-      })
-      .catch(error => {
-        console.error('❌ HTTP Functions fetch error:', error);
-        throw error; // Rethrow to try the next method
-      });
-    }
-    
-    // Try Web Method
-    function tryWebMethod(data) {
-      console.log('🔄 Trying Web Method...');
-      const url = `${baseUrl}/_api/fulfillment-webmethod/createOrderFulfillment`;
-      console.log('Fetching URL:', url);
-      
-      return fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        mode: 'cors',
-        body: JSON.stringify(data)
-      })
-      .then(response => {
-        console.log('Web Method Response Status:', response.status);
-        if (!response.ok) {
-          throw new Error(`Web Method response not OK: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then(result => {
-        console.log('Web Method Result:', result);
-        if (result.success) {
-          showSuccess('Order fulfilled successfully using Web Method');
-          return result;
-        } else {
-          throw new Error(result.message || 'Web Method call failed');
-        }
-      })
-      .catch(error => {
-        console.error('❌ Web Method fetch error:', error);
+        
+        console.log('Dashboard SDK result:', result);
+        return result.data || result;
+      } catch (error) {
+        console.error('Dashboard SDK call failed:', error);
         throw error;
-      });
+      }
     }
     
-    // Show final error after all methods fail
-    function showFinalError(error) {
-      console.error('❌ Final error:', error);
-      showError('Failed to fulfill order. See console for details. ' + error.message);
+    // Fallback HTTP function call
+    async function callHTTPFunction(data) {
+      console.log('🔄 Calling HTTP function directly...');
       
-      // Re-enable the button
-      document.getElementById('fulfillButton').disabled = false;
+      const response = await fetch('/_functions/fulfillOrder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('HTTP function result:', result);
+      
+      if (result.success) {
+        showSuccess('Order fulfilled successfully using HTTP Functions');
+      } else {
+        throw new Error(result.message || 'HTTP function call failed');
+      }
     }
     
     // Show success message
