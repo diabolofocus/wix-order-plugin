@@ -119,63 +119,97 @@
     <div class="debug-info">
       <div>Plugin Status: <span id="pluginStatus">Initializing...</span></div>
       <div>Order Data: <span id="orderData">Loading...</span></div>
+      <div>SDK Version: <span id="sdkVersion">Unknown</span></div>
     </div>
   </div>
   
-  <!-- Include Wix Dashboard SDK -->
-  <script src="https://static.parastorage.com/services/third-party/velo/dashboard-2.0.js"></script>
-  
-  <script>
+  <!-- Wix Dashboard SDK for Self-Hosted Plugins -->
+  <script type="module">
+    // Import the dashboard SDK
+    import { dashboard } from 'https://static.parastorage.com/services/wix-apps/wix-dashboard-sdk/1.0.0/dashboard.esm.js';
+    
     // Global variables
     let orderId = null;
     let dashboardAPI = null;
     
-    // Initialize the plugin
+    // Wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('🚀 Initializing dashboard plugin...');
       
       try {
-        // Initialize Wix Dashboard SDK
-        dashboardAPI = await window.dashboard.init();
-        console.log('✅ Dashboard SDK initialized');
+        // Initialize the dashboard SDK
+        dashboardAPI = dashboard;
+        console.log('✅ Dashboard SDK loaded');
+        
+        // Update status
+        document.getElementById('pluginStatus').textContent = 'SDK Loaded';
+        document.getElementById('sdkVersion').textContent = 'ES Module';
         
         // Observe dashboard state for order data
-        dashboardAPI.observeState((state) => {
-          console.log('Dashboard state:', state);
+        dashboard.observeState((componentParams) => {
+          console.log('Dashboard state received:', componentParams);
           
-          if (state && state.orderId) {
-            orderId = state.orderId;
+          if (componentParams && componentParams.orderId) {
+            orderId = componentParams.orderId;
             displayOrderInfo(orderId);
-            document.getElementById('orderData').textContent = JSON.stringify(state);
+            document.getElementById('orderData').textContent = JSON.stringify(componentParams);
+            document.getElementById('pluginStatus').textContent = 'Connected - Order Data Received';
+          } else if (componentParams) {
+            document.getElementById('orderData').textContent = JSON.stringify(componentParams);
+            document.getElementById('pluginStatus').textContent = 'Connected - Waiting for Order Data';
           }
         });
-        
-        document.getElementById('pluginStatus').textContent = 'Connected to Dashboard';
         
         // Add event listener for fulfill button
         document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
         
+        // Try fallback initialization after a short delay
+        setTimeout(() => {
+          if (!orderId) {
+            console.log('No order data received, trying fallback...');
+            initializeFallback();
+          }
+        }, 2000);
+        
       } catch (error) {
         console.error('❌ Failed to initialize dashboard SDK:', error);
-        document.getElementById('pluginStatus').textContent = 'Failed to connect';
+        document.getElementById('pluginStatus').textContent = 'Failed to connect: ' + error.message;
         
-        // Fallback: try to get order ID from URL
+        // Try fallback immediately if SDK fails
         initializeFallback();
       }
     });
     
-    // Fallback initialization if Dashboard SDK fails
+    // Fallback initialization if Dashboard SDK fails or no data
     function initializeFallback() {
       console.log('Using fallback initialization...');
       
+      // Try to get order ID from URL parameters
       const urlParams = new URLSearchParams(window.location.search);
-      orderId = urlParams.get('orderId');
+      const urlOrderId = urlParams.get('orderId');
       
-      if (orderId) {
+      // Try to get from hash parameters
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const hashOrderId = hashParams.get('orderId');
+      
+      // Try to get from pathname
+      const pathParts = window.location.pathname.split('/');
+      const pathOrderId = pathParts[pathParts.length - 1];
+      
+      orderId = urlOrderId || hashOrderId || pathOrderId || null;
+      
+      if (orderId && orderId !== '' && orderId !== 'index.html') {
         displayOrderInfo(orderId);
         document.getElementById('orderData').textContent = `Fallback mode - Order ID: ${orderId}`;
+        document.getElementById('pluginStatus').textContent = 'Fallback Mode - Order ID Found';
       } else {
-        showError('No order ID found. Please open this plugin from the Wix Orders dashboard.');
+        // For testing purposes, create a mock order ID
+        orderId = 'test-order-' + Date.now();
+        displayOrderInfo(orderId);
+        document.getElementById('orderData').textContent = `Test mode - Mock Order ID: ${orderId}`;
+        document.getElementById('pluginStatus').textContent = 'Test Mode - Mock Order Created';
+        
+        showError('No order ID found. This is running in test mode. In production, open from Wix Orders dashboard.');
       }
     }
     
@@ -184,7 +218,7 @@
       document.getElementById('orderId').textContent = orderId;
       
       // Generate a default tracking number for testing
-      const randomTrackingNum = Math.floor(Math.random() * 10000000000000000000).toString();
+      const randomTrackingNum = 'WX' + Math.floor(Math.random() * 10000000000000000).toString();
       document.getElementById('trackingNumber').value = randomTrackingNum;
       
       // Enable form fields and button
@@ -217,54 +251,57 @@
       const fulfillmentData = {
         orderId: orderId,
         trackingNumber: trackingNumber,
-        trackingCompany: trackingCompany || 'Default Carrier'
+        trackingCompany: trackingCompany || 'Other'
       };
       
       console.log('Fulfillment data:', fulfillmentData);
       
       try {
-        // Try using Dashboard SDK to call web method
-        if (dashboardAPI) {
-          const result = await callWebMethodViaDashboard(fulfillmentData);
-          if (result.success) {
-            showSuccess('Order fulfilled successfully using Dashboard SDK');
-          } else {
-            throw new Error(result.message || 'Dashboard SDK call failed');
-          }
-        } else {
-          // Fallback to direct HTTP call
+        // Try web method first (preferred)
+        await callWebMethod(fulfillmentData);
+      } catch (webMethodError) {
+        console.warn('Web method failed, trying HTTP function:', webMethodError);
+        
+        try {
+          // Fallback to HTTP function
           await callHTTPFunction(fulfillmentData);
+        } catch (httpError) {
+          console.error('❌ Both methods failed:', httpError);
+          showError('Failed to fulfill order: ' + httpError.message);
+          document.getElementById('fulfillButton').disabled = false;
         }
-      } catch (error) {
-        console.error('❌ Fulfillment failed:', error);
-        showError('Failed to fulfill order: ' + error.message);
-        document.getElementById('fulfillButton').disabled = false;
       }
     }
     
-    // Call web method via Dashboard SDK
-    async function callWebMethodViaDashboard(data) {
-      console.log('🔄 Calling web method via Dashboard SDK...');
+    // Call web method (preferred approach)
+    async function callWebMethod(data) {
+      console.log('🔄 Calling web method...');
       
-      try {
-        // Use the Dashboard SDK to call your web method
-        const result = await dashboardAPI.httpClient.request({
-          url: '/_api/fulfillment-webmethod/createOrderFulfillment',
-          method: 'POST',
-          data: data
-        });
-        
-        console.log('Dashboard SDK result:', result);
-        return result.data || result;
-      } catch (error) {
-        console.error('Dashboard SDK call failed:', error);
-        throw error;
+      const response = await fetch('/_api/fulfillment-webmethod/createOrderFulfillment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Web method error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      console.log('Web method result:', result);
+      
+      if (result.success) {
+        showSuccess('Order fulfilled successfully using Web Method');
+      } else {
+        throw new Error(result.message || 'Web method call failed');
       }
     }
     
     // Fallback HTTP function call
     async function callHTTPFunction(data) {
-      console.log('🔄 Calling HTTP function directly...');
+      console.log('🔄 Calling HTTP function...');
       
       const response = await fetch('/_functions/fulfillOrder', {
         method: 'POST',
@@ -282,7 +319,7 @@
       console.log('HTTP function result:', result);
       
       if (result.success) {
-        showSuccess('Order fulfilled successfully using HTTP Functions');
+        showSuccess('Order fulfilled successfully using HTTP Function');
       } else {
         throw new Error(result.message || 'HTTP function call failed');
       }
@@ -304,6 +341,13 @@
       const statusArea = document.getElementById('statusArea');
       statusArea.innerHTML = `<div class="error">${message}</div>`;
     }
+    
+    // Make functions available globally for debugging
+    window.debugPlugin = {
+      orderId: () => orderId,
+      dashboardAPI: () => dashboardAPI,
+      reinitialize: initializeFallback
+    };
   </script>
 </body>
 </html>
