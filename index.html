@@ -125,8 +125,9 @@
   
   <!-- Wix Dashboard SDK for Self-Hosted Plugins -->
   <script src="https://static.parastorage.com/services/third-party/velo/dashboard-2.0.js"></script>
-  <script type="module")
+  <script>
     
+  <script>
     // Global variables
     let orderId = null;
     let dashboardAPI = null;
@@ -135,81 +136,115 @@
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('🚀 Initializing dashboard plugin...');
       
+      // First, try to extract order ID from URL immediately
+      extractOrderIdFromUrl();
+      
       try {
-        // Initialize the dashboard SDK
-        dashboardAPI = dashboard;
-        console.log('✅ Dashboard SDK loaded');
-        
-        // Update status
-        document.getElementById('pluginStatus').textContent = 'SDK Loaded';
-        document.getElementById('sdkVersion').textContent = 'ES Module';
-        
-        // Observe dashboard state for order data
-        dashboard.observeState((componentParams) => {
-          console.log('Dashboard state received:', componentParams);
+        // Check if dashboard SDK is available
+        if (typeof window.dashboard !== 'undefined') {
+          dashboardAPI = await window.dashboard.init();
+          console.log('✅ Dashboard SDK initialized');
           
-          if (componentParams && componentParams.orderId) {
-            orderId = componentParams.orderId;
-            displayOrderInfo(orderId);
-            document.getElementById('orderData').textContent = JSON.stringify(componentParams);
-            document.getElementById('pluginStatus').textContent = 'Connected - Order Data Received';
-          } else if (componentParams) {
-            document.getElementById('orderData').textContent = JSON.stringify(componentParams);
-            document.getElementById('pluginStatus').textContent = 'Connected - Waiting for Order Data';
-          }
-        });
-        
-        // Add event listener for fulfill button
-        document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
-        
-        // Try fallback initialization after a short delay
-        setTimeout(() => {
-          if (!orderId) {
-            console.log('No order data received, trying fallback...');
-            initializeFallback();
-          }
-        }, 2000);
+          // Update status
+          document.getElementById('pluginStatus').textContent = 'SDK Connected';
+          document.getElementById('sdkVersion').textContent = 'Dashboard 2.0';
+          
+          // Observe dashboard state for order data
+          dashboardAPI.observeState((componentParams) => {
+            console.log('Dashboard state received:', componentParams);
+            
+            if (componentParams && componentParams.orderId) {
+              orderId = componentParams.orderId;
+              displayOrderInfo(orderId);
+              document.getElementById('orderData').textContent = JSON.stringify(componentParams);
+              document.getElementById('pluginStatus').textContent = 'Connected - Order Data Received';
+            } else if (componentParams) {
+              document.getElementById('orderData').textContent = JSON.stringify(componentParams);
+              document.getElementById('pluginStatus').textContent = 'Connected - Waiting for Order Data';
+            }
+          });
+        } else {
+          throw new Error('Dashboard SDK not available');
+        }
         
       } catch (error) {
         console.error('❌ Failed to initialize dashboard SDK:', error);
-        document.getElementById('pluginStatus').textContent = 'Failed to connect: ' + error.message;
+        document.getElementById('pluginStatus').textContent = 'SDK Failed - Using Fallback';
+        document.getElementById('sdkVersion').textContent = 'Fallback Mode';
         
-        // Try fallback immediately if SDK fails
-        initializeFallback();
+        // Use the order ID we extracted from URL
+        if (orderId) {
+          displayOrderInfo(orderId);
+          document.getElementById('orderData').textContent = `URL Extracted - Order ID: ${orderId}`;
+        }
       }
+      
+      // Add event listener for fulfill button
+      document.getElementById('fulfillButton').addEventListener('click', handleFulfillment);
+      
+      // If no order ID found after 3 seconds, show error
+      setTimeout(() => {
+        if (!orderId) {
+          document.getElementById('pluginStatus').textContent = 'No Order ID Found';
+          showError('No order ID found. Please open from Wix Orders dashboard or check URL parameters.');
+        }
+      }, 3000);
     });
     
-    // Fallback initialization if Dashboard SDK fails or no data
-    function initializeFallback() {
-      console.log('Using fallback initialization...');
+    // Enhanced order ID extraction from URL
+    function extractOrderIdFromUrl() {
+      console.log('Extracting order ID from URL:', window.location.href);
       
-      // Try to get order ID from URL parameters
+      // Method 1: URL search parameters
       const urlParams = new URLSearchParams(window.location.search);
-      const urlOrderId = urlParams.get('orderId');
+      let extractedOrderId = urlParams.get('orderId');
       
-      // Try to get from hash parameters
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const hashOrderId = hashParams.get('orderId');
-      
-      // Try to get from pathname
-      const pathParts = window.location.pathname.split('/');
-      const pathOrderId = pathParts[pathParts.length - 1];
-      
-      orderId = urlOrderId || hashOrderId || pathOrderId || null;
-      
-      if (orderId && orderId !== '' && orderId !== 'index.html') {
-        displayOrderInfo(orderId);
-        document.getElementById('orderData').textContent = `Fallback mode - Order ID: ${orderId}`;
-        document.getElementById('pluginStatus').textContent = 'Fallback Mode - Order ID Found';
-      } else {
-        // For testing purposes, create a mock order ID
-        orderId = 'test-order-' + Date.now();
-        displayOrderInfo(orderId);
-        document.getElementById('orderData').textContent = `Test mode - Mock Order ID: ${orderId}`;
-        document.getElementById('pluginStatus').textContent = 'Test Mode - Mock Order Created';
-        
-        showError('No order ID found. This is running in test mode. In production, open from Wix Orders dashboard.');
+      if (extractedOrderId) {
+        console.log('Found order ID in URL params:', extractedOrderId);
+        orderId = extractedOrderId;
+        return;
       }
+      
+      // Method 2: Hash parameters
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      extractedOrderId = hashParams.get('orderId');
+      
+      if (extractedOrderId) {
+        console.log('Found order ID in hash params:', extractedOrderId);
+        orderId = extractedOrderId;
+        return;
+      }
+      
+      // Method 3: Extract from Wix dashboard URL pattern
+      // Pattern: /order-details/{orderId} or /orders/{orderId}
+      const urlPath = window.location.pathname;
+      const orderDetailsMatch = urlPath.match(/\/order-details\/([a-f0-9\-]{36})/i);
+      if (orderDetailsMatch) {
+        extractedOrderId = orderDetailsMatch[1];
+        console.log('Found order ID in order-details path:', extractedOrderId);
+        orderId = extractedOrderId;
+        return;
+      }
+      
+      const ordersMatch = urlPath.match(/\/orders\/([a-f0-9\-]{36})/i);
+      if (ordersMatch) {
+        extractedOrderId = ordersMatch[1];
+        console.log('Found order ID in orders path:', extractedOrderId);
+        orderId = extractedOrderId;
+        return;
+      }
+      
+      // Method 4: Extract UUID from URL (any 36-character UUID)
+      const uuidMatches = window.location.href.match(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/gi);
+      if (uuidMatches && uuidMatches.length > 0) {
+        // Use the last UUID found (likely the order ID)
+        extractedOrderId = uuidMatches[uuidMatches.length - 1];
+        console.log('Found UUID in URL:', extractedOrderId);
+        orderId = extractedOrderId;
+        return;
+      }
+      
+      console.log('No order ID found in URL');
     }
     
     // Display order information
@@ -224,6 +259,8 @@
       document.getElementById('trackingNumber').disabled = false;
       document.getElementById('trackingCompany').disabled = false;
       document.getElementById('fulfillButton').disabled = false;
+      
+      document.getElementById('pluginStatus').textContent = 'Ready';
     }
     
     // Handle the fulfillment process
@@ -252,6 +289,7 @@
         trackingNumber: trackingNumber,
         trackingCompany: trackingCompany || 'Other'
       };
+  </script>
       
       console.log('Fulfillment data:', fulfillmentData);
       
@@ -345,8 +383,10 @@
     window.debugPlugin = {
       orderId: () => orderId,
       dashboardAPI: () => dashboardAPI,
-      reinitialize: initializeFallback
+      extractOrderId: extractOrderIdFromUrl,
+      currentUrl: window.location.href
     };
+
   </script>
 </body>
 </html>
