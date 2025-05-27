@@ -120,13 +120,13 @@
       <div>Plugin Status: <span id="pluginStatus">Initializing...</span></div>
       <div>Order Data: <span id="orderData">Loading...</span></div>
       <div>SDK Version: <span id="sdkVersion">Unknown</span></div>
+      <div>Current URL: <span id="currentUrl">Loading...</span></div>
     </div>
   </div>
   
   <!-- Wix Dashboard SDK for Self-Hosted Plugins -->
   <script src="https://static.parastorage.com/services/third-party/velo/dashboard-2.0.js"></script>
-  <script>
-    
+  
   <script>
     // Global variables
     let orderId = null;
@@ -135,6 +135,10 @@
     // Wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('🚀 Initializing dashboard plugin...');
+      console.log('Current URL:', window.location.href);
+      
+      // Display current URL for debugging
+      document.getElementById('currentUrl').textContent = window.location.href;
       
       // First, try to extract order ID from URL immediately
       extractOrderIdFromUrl();
@@ -202,6 +206,7 @@
       if (extractedOrderId) {
         console.log('Found order ID in URL params:', extractedOrderId);
         orderId = extractedOrderId;
+        document.getElementById('pluginStatus').textContent = 'Order ID found in URL params';
         return;
       }
       
@@ -212,6 +217,7 @@
       if (extractedOrderId) {
         console.log('Found order ID in hash params:', extractedOrderId);
         orderId = extractedOrderId;
+        document.getElementById('pluginStatus').textContent = 'Order ID found in hash params';
         return;
       }
       
@@ -223,6 +229,7 @@
         extractedOrderId = orderDetailsMatch[1];
         console.log('Found order ID in order-details path:', extractedOrderId);
         orderId = extractedOrderId;
+        document.getElementById('pluginStatus').textContent = 'Order ID found in URL path';
         return;
       }
       
@@ -231,6 +238,7 @@
         extractedOrderId = ordersMatch[1];
         console.log('Found order ID in orders path:', extractedOrderId);
         orderId = extractedOrderId;
+        document.getElementById('pluginStatus').textContent = 'Order ID found in orders path';
         return;
       }
       
@@ -240,15 +248,19 @@
         // Use the last UUID found (likely the order ID)
         extractedOrderId = uuidMatches[uuidMatches.length - 1];
         console.log('Found UUID in URL:', extractedOrderId);
+        console.log('All UUIDs found:', uuidMatches);
         orderId = extractedOrderId;
+        document.getElementById('pluginStatus').textContent = 'Order ID found as UUID in URL';
         return;
       }
       
       console.log('No order ID found in URL');
+      document.getElementById('pluginStatus').textContent = 'No Order ID found in URL';
     }
     
     // Display order information
     function displayOrderInfo(orderId) {
+      console.log('Displaying order info for:', orderId);
       document.getElementById('orderId').textContent = orderId;
       
       // Generate a default tracking number for testing
@@ -289,7 +301,6 @@
         trackingNumber: trackingNumber,
         trackingCompany: trackingCompany || 'Other'
       };
-  </script>
       
       console.log('Fulfillment data:', fulfillmentData);
       
@@ -384,9 +395,12 @@
       orderId: () => orderId,
       dashboardAPI: () => dashboardAPI,
       extractOrderId: extractOrderIdFromUrl,
-      currentUrl: window.location.href
+      currentUrl: window.location.href,
+      testOrderId: (testId) => {
+        orderId = testId;
+        displayOrderInfo(testId);
+      }
     };
-
   </script>
 </body>
 </html>
